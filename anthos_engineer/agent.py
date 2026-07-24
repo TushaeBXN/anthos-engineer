@@ -14,15 +14,29 @@ OLLAMA_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 DEFAULT_MODEL = os.environ.get("ANTHOS_MODEL", "amy")
 
 
-def _call_ollama(prompt: str, model: str = DEFAULT_MODEL) -> str:
-    payload = {
-        "model": model,
-        "messages": [{"role": "user", "content": prompt}],
-        "stream": False,
-    }
+def _call_ollama(prompt: str, model: str = DEFAULT_MODEL, system: str | None = None) -> str:
+    messages = []
+    if system:
+        messages.append({"role": "system", "content": system})
+    messages.append({"role": "user", "content": prompt})
+    payload = {"model": model, "messages": messages, "stream": False}
     resp = httpx.post(f"{OLLAMA_URL}/v1/chat/completions", json=payload, timeout=120)
     resp.raise_for_status()
     return resp.json()["choices"][0]["message"]["content"]
+
+
+def classify_intent(goal: str, model: str = DEFAULT_MODEL) -> str:
+    """Return 'build' if goal is a coding/build task, 'chat' otherwise."""
+    prompt = f"""Classify this user message. Reply with exactly one word: "build" or "chat".
+
+"build" = the user wants to create, code, build, fix, or automate something technical.
+"chat" = the user is greeting, asking a question, or having a conversation.
+
+Message: {goal}
+
+Reply with only "build" or "chat":"""
+    result = _call_ollama(prompt, model).strip().lower()
+    return "build" if "build" in result else "chat"
 
 
 def _extract_json(text: str) -> list | dict:
@@ -127,6 +141,13 @@ Requirements:
             return {"success": True, "output": content[:500]}
         except Exception as e:
             return {"success": False, "output": str(e)}
+
+    def chat(self, message: str) -> str:
+        system = (
+            "You are Anthos Engineer, a helpful AI coding assistant powered by local models. "
+            "Answer conversationally and helpfully. Keep responses concise."
+        )
+        return _call_ollama(message, self.model, system=system)
 
     def files(self) -> list[str]:
         return [

@@ -80,6 +80,14 @@ function streamSession(sessionId) {
     addLog('info', '<span class="spinner"></span>', message);
   });
 
+  es.addEventListener('chat', (e) => {
+    const { message } = JSON.parse(e.data);
+    // Remove the "Thinking…" spinner log
+    const last = logFeed.lastElementChild;
+    if (last) last.remove();
+    addLog('ok', '⬡', message);
+  });
+
   es.addEventListener('plan', (e) => {
     const { steps } = JSON.parse(e.data);
     planSection.hidden = false;

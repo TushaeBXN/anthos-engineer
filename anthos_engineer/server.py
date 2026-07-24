@@ -10,7 +10,7 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from anthos_engineer.agent import AnthosEngineer
+from anthos_engineer.agent import AnthosEngineer, classify_intent
 
 app = FastAPI(title="Anthos Engineer")
 
@@ -56,12 +56,25 @@ async def stream_session(session_id: str):
 
         engineer = AnthosEngineer(model=session["model"])
         session["workspace"] = str(engineer.workspace)
+        loop = asyncio.get_event_loop()
+
+        # Classify intent first: chat vs build
+        yield emit("status", {"message": "Thinking…"})
+        await asyncio.sleep(0.05)
+        intent = await loop.run_in_executor(None, classify_intent, session["goal"], session["model"])
+
+        if intent == "chat":
+            # Conversational reply — no build steps
+            reply = await loop.run_in_executor(None, engineer.chat, session["goal"])
+            session["status"] = "done"
+            yield emit("chat", {"message": reply})
+            yield emit("done", {"files": [], "workspace": "", "steps_completed": 0})
+            return
 
         yield emit("status", {"message": f"Planning how to: {session['goal']}"})
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0.05)
 
         # Planning phase
-        loop = asyncio.get_event_loop()
         plan = await loop.run_in_executor(None, engineer.plan, session["goal"])
         session["plan"] = plan
         session["status"] = "executing"
