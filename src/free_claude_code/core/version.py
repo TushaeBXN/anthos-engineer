@@ -1,4 +1,4 @@
-"""Canonical installed Free Claude Code package version."""
+"""Canonical installed Anthos Engineer package version."""
 
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as distribution_version

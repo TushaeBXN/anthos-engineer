@@ -46,16 +46,16 @@ _STRIPPED_CODEX_ENV_KEYS = frozenset(
 
 
 def launch(argv: Sequence[str] | None = None) -> None:
-    """Launch Codex CLI with Free Claude Code proxy configuration."""
+    """Launch Codex CLI with Anthos Engineer proxy configuration."""
 
     settings = get_settings()
     proxy_root_url = local_proxy_root_url(settings)
     if error := preflight_proxy(proxy_root_url):
         print(
-            f"Free Claude Code proxy is not reachable at {proxy_root_url}: {error}",
+            f"Anthos Engineer proxy is not reachable at {proxy_root_url}: {error}",
             file=sys.stderr,
         )
-        print("Start it in another terminal with: fcc-server", file=sys.stderr)
+        print("Start it in another terminal with: anthos-server", file=sys.stderr)
         raise SystemExit(1)
 
     binary_name = codex_binary_name()
@@ -145,7 +145,7 @@ def codex_model_catalog_config_args(
         models = catalog.get("models")
         if not isinstance(models, list) or not models:
             print(
-                "Free Claude Code warning: Codex model catalog is empty; "
+                "Anthos Engineer warning: Codex model catalog is empty; "
                 "launching without model picker catalog.",
                 file=sys.stderr,
             )
@@ -154,7 +154,7 @@ def codex_model_catalog_config_args(
         write_codex_model_catalog(catalog_path, catalog)
     except Exception as exc:
         print(
-            "Free Claude Code warning: could not prepare Codex model catalog "
+            "Anthos Engineer warning: could not prepare Codex model catalog "
             f"({exc}); launching without model picker catalog.",
             file=sys.stderr,
         )
@@ -197,7 +197,7 @@ def codex_config_args(*, api_url: str, model: str | None = None) -> list[str]:
         "-c",
         _toml_assignment("model_provider", "fcc"),
         "-c",
-        _toml_assignment("model_providers.fcc.name", "Free Claude Code"),
+        _toml_assignment("model_providers.fcc.name", "Anthos Engineer"),
         "-c",
         _toml_assignment("model_providers.fcc.base_url", _ensure_v1_url(api_url)),
         "-c",

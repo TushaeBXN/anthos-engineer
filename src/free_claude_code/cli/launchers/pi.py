@@ -18,7 +18,7 @@ _BASE_URL_ENV = "FCC_PI_BASE_URL"
 _BINARY_NAME = "pi"
 _DISPLAY_NAME = "Pi"
 _HELP_TIMEOUT_SECONDS = 5.0
-_MODEL_SCOPE = "free-claude-code/**"
+_MODEL_SCOPE = "anthos-engineer/**"
 _REQUIRED_HELP_MARKERS = ("--extension", "--models")
 _PASSTHROUGH_COMMANDS = frozenset(
     {"config", "install", "list", "remove", "uninstall", "update"}
@@ -27,7 +27,7 @@ _PASSTHROUGH_FLAGS = frozenset({"--help", "-h", "--version", "-v"})
 
 
 def launch(argv: Sequence[str] | None = None) -> None:
-    """Launch Pi with a process-local Free Claude Code provider."""
+    """Launch Pi with a process-local Anthos Engineer provider."""
 
     args = list(sys.argv[1:] if argv is None else argv)
     install_hint = pi_install_hint()
@@ -58,16 +58,16 @@ def launch(argv: Sequence[str] | None = None) -> None:
     proxy_root_url = local_proxy_root_url(settings)
     if error := preflight_proxy(proxy_root_url):
         print(
-            f"Free Claude Code proxy is not reachable at {proxy_root_url}: {error}",
+            f"Anthos Engineer proxy is not reachable at {proxy_root_url}: {error}",
             file=sys.stderr,
         )
-        print("Start it in another terminal with: fcc-server", file=sys.stderr)
+        print("Start it in another terminal with: anthos-server", file=sys.stderr)
         raise SystemExit(1)
 
     extension_path = pi_extension_path()
     if not extension_path.is_file():
         print(
-            "Free Claude Code's bundled Pi extension is missing. Reinstall FCC.",
+            "Anthos Engineer's bundled Pi extension is missing. Reinstall Anthos Engineer.",
             file=sys.stderr,
         )
         raise SystemExit(1)

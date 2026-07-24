@@ -1,4 +1,4 @@
-"""Implementations for installed Free Claude Code commands."""
+"""Implementations for installed Anthos Engineer commands."""
 
 import os
 import shutil

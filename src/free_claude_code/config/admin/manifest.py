@@ -305,7 +305,7 @@ _NON_PROVIDER_FIELDS: tuple[ConfigFieldSpec, ...] = (
         "boolean",
         settings_attr="open_admin_browser",
         default="true",
-        description="Open the Admin UI after the next fcc-server launch becomes healthy.",
+        description="Open the Admin UI after the next anthos-server launch becomes healthy.",
     ),
     ConfigFieldSpec(
         "MESSAGING_PLATFORM",

@@ -18,16 +18,16 @@ _INSTALL_HINT = "Install Claude Code with: npm install -g @anthropic-ai/claude-c
 
 
 def launch(argv: Sequence[str] | None = None) -> None:
-    """Launch Claude Code with Free Claude Code proxy environment variables."""
+    """Launch Claude Code with Anthos Engineer proxy environment variables."""
 
     settings = get_settings()
     proxy_root_url = local_proxy_root_url(settings)
     if error := preflight_proxy(proxy_root_url):
         print(
-            f"Free Claude Code proxy is not reachable at {proxy_root_url}: {error}",
+            f"Anthos Engineer proxy is not reachable at {proxy_root_url}: {error}",
             file=sys.stderr,
         )
-        print("Start it in another terminal with: fcc-server", file=sys.stderr)
+        print("Start it in another terminal with: anthos-server", file=sys.stderr)
         raise SystemExit(1)
 
     binary_name = claude_binary_name()

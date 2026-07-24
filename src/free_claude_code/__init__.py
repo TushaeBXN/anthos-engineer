@@ -1,1 +1,1 @@
-"""Free Claude Code package."""
+"""Anthos Engineer package."""
