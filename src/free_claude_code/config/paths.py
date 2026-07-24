@@ -4,7 +4,7 @@ from pathlib import Path
 
 FCC_CONFIG_DIRNAME = ".fcc"
 FCC_ENV_FILENAME = ".env"
-LEGACY_REPO_DIRNAME = "free-claude-code"
+LEGACY_REPO_DIRNAME = "anthos-engineer"
 LEGACY_XDG_CONFIG_DIRNAME = ".config"
 MESSAGING_STATE_DIRNAME = "agent_workspace"
 FCC_LOGS_DIRNAME = "logs"

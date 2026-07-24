@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "free-claude-code"
-version = "4.12.1"
-description = "Local proxy connecting coding agents to OpenAI-compatible AI providers"
+name = "anthos-engineer"
+version = "1.0.0"
+description = "Anthos Engineer — agentic coding proxy connecting to local and cloud AI providers"
 readme = "README.md"
 requires-python = ">=3.14.0"
 dependencies = [
@@ -30,13 +30,13 @@ dependencies = [
 ]
 
 [project.scripts]
-fcc-server = "free_claude_code.cli.entrypoints:serve"
-fcc-claude = "free_claude_code.cli.launchers.claude:launch"
-fcc-codex = "free_claude_code.cli.launchers.codex:launch"
-fcc-pi = "free_claude_code.cli.launchers.pi:launch"
+anthos-server = "free_claude_code.cli.entrypoints:serve"
+anthos-engineer = "free_claude_code.cli.launchers.claude:launch"
+anthos-codex = "free_claude_code.cli.launchers.codex:launch"
+anthos-pi = "free_claude_code.cli.launchers.pi:launch"
 
 [project.gui-scripts]
-fcc-desktop = "free_claude_code.cli.desktop_entrypoint:launch"
+anthos-desktop = "free_claude_code.cli.desktop_entrypoint:launch"
 
 [project.optional-dependencies]
 voice = [
