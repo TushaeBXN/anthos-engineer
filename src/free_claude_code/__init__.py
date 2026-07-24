@@ -1,1 +1,0 @@
-"""Anthos Engineer package."""
