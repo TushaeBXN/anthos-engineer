@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🤖 Free Claude Code
+# 🤖 Anthos Engineer
 
 Use Claude Code, Codex, Pi, or their IDE extensions through your own provider-backed proxy.
 
