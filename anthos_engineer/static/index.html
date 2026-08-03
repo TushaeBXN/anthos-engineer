@@ -10,60 +10,73 @@
   <div class="shell">
     <aside class="sidebar">
       <div class="brand">
-        <svg class="flower" width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="16" cy="16" r="3.5" fill="#10b981"/>
-          <ellipse cx="16" cy="6.5" rx="2.5" ry="4.5" fill="#10b981" opacity="0.85"/>
-          <ellipse cx="16" cy="25.5" rx="2.5" ry="4.5" fill="#10b981" opacity="0.85"/>
-          <ellipse cx="6.5" cy="16" rx="4.5" ry="2.5" fill="#10b981" opacity="0.85"/>
-          <ellipse cx="25.5" cy="16" rx="4.5" ry="2.5" fill="#10b981" opacity="0.85"/>
-          <ellipse cx="8.9" cy="8.9" rx="2.5" ry="4.5" fill="#10b981" opacity="0.65" transform="rotate(-45 8.9 8.9)"/>
-          <ellipse cx="23.1" cy="8.9" rx="2.5" ry="4.5" fill="#10b981" opacity="0.65" transform="rotate(45 23.1 8.9)"/>
-          <ellipse cx="8.9" cy="23.1" rx="2.5" ry="4.5" fill="#10b981" opacity="0.65" transform="rotate(45 8.9 23.1)"/>
-          <ellipse cx="23.1" cy="23.1" rx="2.5" ry="4.5" fill="#10b981" opacity="0.65" transform="rotate(-45 23.1 23.1)"/>
-        </svg>
+        <div class="brand-icon">⚙</div>
         <div>
           <h1>Anthos Engineer</h1>
-          <p id="modelLabel">amy · local</p>
+          <p id="modelLabel">local</p>
         </div>
+      </div>
+
+      <div class="mode-tabs">
+        <button id="tabAmy" class="mode-tab active" data-mode="amy">Chat</button>
+        <button id="tabEng" class="mode-tab" data-mode="engineer">Engineer</button>
       </div>
 
       <div class="sidebar-section">
         <label>Model</label>
         <select id="modelSelect">
           <option value="amy">amy</option>
-          <option value="amy-base">amy-base</option>
-          <option value="kerrigan-fantasma">kerrigan-fantasma</option>
-          <option value="llama3.2:3b">llama3.2:3b</option>
-          <option value="deepseek-coder:6.7b">deepseek-coder:6.7b</option>
-          <option value="llama3.2-vision">llama3.2-vision</option>
         </select>
+        <div id="ollamaStatus" class="ollama-status"></div>
       </div>
 
-      <div class="sidebar-section history-section">
+      <div id="amySidebarSection" class="sidebar-section history-section">
+        <label>Conversations</label>
+        <button id="newChatBtn" class="new-chat-btn">+ New chat</button>
+        <ul id="amyHistoryList" class="history-list"></ul>
+      </div>
+
+      <div id="engSidebarSection" class="sidebar-section history-section" hidden>
         <label>Sessions</label>
         <ul id="historyList" class="history-list"></ul>
       </div>
     </aside>
 
     <main class="main">
-      <div id="homeView" class="home-view">
+      <!-- Chat view -->
+      <div id="amyView" class="amy-view">
+        <div id="chatMessages" class="chat-messages">
+          <div class="amy-welcome">
+            <div class="welcome-icon">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="4 17 10 11 4 5"/>
+                <line x1="12" y1="19" x2="20" y2="19"/>
+              </svg>
+            </div>
+            <h2 id="welcomeHeading">Ready.</h2>
+            <p>Drop a message, paste code, or attach a file.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Engineer home view -->
+      <div id="homeView" class="home-view" hidden>
         <div class="home-center">
-          <svg class="hero-flower" width="64" height="64" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="16" cy="16" r="3.5" fill="#10b981"/>
-            <ellipse cx="16" cy="6.5" rx="2.5" ry="4.5" fill="#10b981" opacity="0.85"/>
-            <ellipse cx="16" cy="25.5" rx="2.5" ry="4.5" fill="#10b981" opacity="0.85"/>
-            <ellipse cx="6.5" cy="16" rx="4.5" ry="2.5" fill="#10b981" opacity="0.85"/>
-            <ellipse cx="25.5" cy="16" rx="4.5" ry="2.5" fill="#10b981" opacity="0.85"/>
-            <ellipse cx="8.9" cy="8.9" rx="2.5" ry="4.5" fill="#10b981" opacity="0.65" transform="rotate(-45 8.9 8.9)"/>
-            <ellipse cx="23.1" cy="8.9" rx="2.5" ry="4.5" fill="#10b981" opacity="0.65" transform="rotate(45 23.1 8.9)"/>
-            <ellipse cx="8.9" cy="23.1" rx="2.5" ry="4.5" fill="#10b981" opacity="0.65" transform="rotate(45 8.9 23.1)"/>
-            <ellipse cx="23.1" cy="23.1" rx="2.5" ry="4.5" fill="#10b981" opacity="0.65" transform="rotate(-45 23.1 23.1)"/>
-          </svg>
+          <div class="hero-icon">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="3" width="20" height="14" rx="2"/>
+              <line x1="8" y1="21" x2="16" y2="21"/>
+              <line x1="12" y1="17" x2="12" y2="21"/>
+              <polyline points="7 8 10 11 7 14"/>
+              <line x1="13" y1="14" x2="17" y2="14"/>
+            </svg>
+          </div>
           <h2>What do you want to build?</h2>
           <p>Describe your goal and Anthos Engineer will plan and build it using your local models.</p>
         </div>
       </div>
 
+      <!-- Engineer session view -->
       <div id="sessionView" class="session-view" hidden>
         <div class="session-header">
           <h2 id="sessionGoal"></h2>
@@ -88,13 +101,27 @@
       </div>
 
       <footer class="input-bar">
+        <div id="attachPreview" class="attach-preview" hidden></div>
         <div class="input-wrap">
+          <button id="attachBtn" class="attach-btn" title="Attach file (image, PDF, code…)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+            </svg>
+          </button>
+          <input id="fileInput" type="file" hidden multiple
+                 accept="image/*,.pdf,.docx,.doc,.txt,.py,.js,.ts,.jsx,.tsx,.md,.json,.csv,.yaml,.yml,.toml,.sh,.go,.rs,.rb,.php,.java,.c,.cpp,.h">
           <textarea
             id="goalInput"
-            placeholder="Describe what you want to build… (e.g. 'Create a Flask REST API with SQLite')"
+            placeholder="Message…"
             rows="1"
           ></textarea>
-          <button id="runBtn" class="run-btn">Build</button>
+          <button id="sendBtn" class="send-btn" title="Send (Enter)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="19" x2="12" y2="5"/>
+              <polyline points="5 12 12 5 19 12"/>
+            </svg>
+          </button>
+          <button id="runBtn" class="run-btn" hidden>Build</button>
         </div>
       </footer>
     </main>
