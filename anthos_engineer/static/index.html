@@ -84,7 +84,23 @@
         </div>
       </footer>
     </main>
-  </div>
+
+    <!-- Preview panel — flex sibling of main inside .shell -->
+    <div id="previewPanel" class="preview-panel" hidden>
+      <div class="preview-header">
+        <span id="previewTitle" class="preview-title"></span>
+        <div class="preview-header-actions">
+          <button id="previewOpenBtn" class="preview-action-btn">Open in Browser</button>
+          <button id="previewDownloadBtn" class="preview-action-btn">Download</button>
+          <button id="previewCloseBtn" class="preview-close-btn">✕</button>
+        </div>
+      </div>
+      <div class="preview-body">
+        <iframe id="previewFrame" class="preview-frame"></iframe>
+        <pre id="previewCode" class="preview-code" hidden></pre>
+      </div>
+    </div>
+  </div><!-- /.shell -->
 
   <script src="/static/app.js"></script>
 </body>

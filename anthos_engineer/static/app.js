@@ -61,6 +61,97 @@ const filesSection  = document.getElementById('filesSection');
 const filesList     = document.getElementById('filesList');
 const workspacePath = document.getElementById('workspacePath');
 
+// ── Preview panel ──────────────────────────────────────────────────────────
+const previewPanel        = document.getElementById('previewPanel');
+const previewTitle        = document.getElementById('previewTitle');
+const previewFrame        = document.getElementById('previewFrame');
+const previewCode         = document.getElementById('previewCode');
+const previewOpenBtn      = document.getElementById('previewOpenBtn');
+const previewDownloadBtn  = document.getElementById('previewDownloadBtn');
+const previewCloseBtn     = document.getElementById('previewCloseBtn');
+
+previewCloseBtn.addEventListener('click', () => {
+  previewPanel.hidden = true;
+  previewFrame.src = '';
+  previewCode.textContent = '';
+});
+
+function openPreview(url, name, mode) {
+  previewTitle.textContent = name;
+  if (mode === 'iframe') {
+    previewCode.hidden = true;
+    previewFrame.hidden = false;
+    previewFrame.src = url;
+    previewOpenBtn.hidden = false;
+    previewOpenBtn.onclick = () => window.open(url, '_blank');
+  } else {
+    previewFrame.hidden = true;
+    previewFrame.src = '';
+    previewCode.hidden = false;
+    previewOpenBtn.hidden = true;
+    fetch(url)
+      .then(r => r.text())
+      .then(text => { previewCode.textContent = text; });
+  }
+  previewDownloadBtn.onclick = () => downloadFile(`${url}?download=1`, name);
+  previewPanel.hidden = false;
+}
+
+function downloadFile(url, name) {
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+function renderFileItem(filename, sessionId) {
+  const li = document.createElement('li');
+  li.className = 'files-list-item';
+
+  const ext = filename.split('.').pop().toLowerCase();
+  const renderableInFrame = ['html', 'htm', 'svg'].includes(ext);
+  const fileUrl = `/api/session/${sessionId}/file/${filename}`;
+
+  const nameEl = document.createElement('span');
+  nameEl.className = 'file-name';
+  nameEl.textContent = filename;
+
+  const actionsEl = document.createElement('div');
+  actionsEl.className = 'file-actions';
+
+  if (renderableInFrame) {
+    const prevBtn = document.createElement('button');
+    prevBtn.className = 'file-btn';
+    prevBtn.textContent = 'Preview';
+    prevBtn.addEventListener('click', () => openPreview(fileUrl, filename, 'iframe'));
+    actionsEl.appendChild(prevBtn);
+
+    const openBtn = document.createElement('button');
+    openBtn.className = 'file-btn';
+    openBtn.textContent = 'Open';
+    openBtn.addEventListener('click', () => window.open(fileUrl, '_blank'));
+    actionsEl.appendChild(openBtn);
+  } else {
+    const viewBtn = document.createElement('button');
+    viewBtn.className = 'file-btn';
+    viewBtn.textContent = 'View';
+    viewBtn.addEventListener('click', () => openPreview(fileUrl, filename, 'code'));
+    actionsEl.appendChild(viewBtn);
+  }
+
+  const dlBtn = document.createElement('button');
+  dlBtn.className = 'file-btn';
+  dlBtn.textContent = 'Download';
+  dlBtn.addEventListener('click', () => downloadFile(`${fileUrl}?download=1`, filename));
+  actionsEl.appendChild(dlBtn);
+
+  li.appendChild(nameEl);
+  li.appendChild(actionsEl);
+  return li;
+}
+
 runBtn.addEventListener('click', async () => {
   const goal = goalInput.value.trim();
   if (!goal) return;
@@ -171,9 +262,7 @@ function streamSession(sessionId) {
       filesSection.hidden = false;
       filesList.innerHTML = '';
       files.forEach(f => {
-        const li = document.createElement('li');
-        li.textContent = f;
-        filesList.appendChild(li);
+        filesList.appendChild(renderFileItem(f, sessionId));
       });
       workspacePath.textContent = `Workspace: ${workspace}`;
     }

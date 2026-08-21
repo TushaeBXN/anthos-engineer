@@ -5,8 +5,10 @@ import json
 import uuid
 from pathlib import Path
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
-from fastapi.responses import HTMLResponse, StreamingResponse
+import mimetypes
+
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -349,6 +351,35 @@ async def amy_list_sessions():
         {"id": k, "label": v.get("label", ""), "turns": len(v.get("history", [])) // 2}
         for k, v in amy_sessions.items()
     ]
+
+
+@app.get("/api/session/{session_id}/file/{file_path:path}")
+async def serve_workspace_file(
+    session_id: str, file_path: str, download: bool = Query(default=False)
+):
+    session = sessions.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    workspace = session.get("workspace")
+    if not workspace:
+        raise HTTPException(status_code=404, detail="No workspace for this session")
+
+    workspace_root = Path(workspace).resolve()
+    full_path = (workspace_root / file_path).resolve()
+
+    try:
+        full_path.relative_to(workspace_root)
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    if not full_path.exists() or not full_path.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    mime_type, _ = mimetypes.guess_type(str(full_path))
+    headers = {}
+    if download:
+        headers["Content-Disposition"] = f'attachment; filename="{full_path.name}"'
+    return FileResponse(str(full_path), media_type=mime_type or "text/plain", headers=headers)
 
 
 def serve():

@@ -241,12 +241,16 @@ Requirements:
         else:
             syntax_note = ""
 
+        # Logic review — ask the model to spot issues before saving
+        code, review_note = self._review_and_fix(code, path, goal)
+
         file_path = self.workspace / path
         file_path.parent.mkdir(parents=True, exist_ok=True)
         file_path.write_text(code)
         self.session.append("assistant", code, {"type": "file_write", "path": path})
 
-        note = f" ({syntax_note})" if syntax_note else ""
+        notes = ", ".join(n for n in [syntax_note, review_note] if n)
+        note = f" ({notes})" if notes else ""
         output = f"Created {path} ({len(code.splitlines())} lines){note}"
 
         # Optional test generation
@@ -255,6 +259,44 @@ Requirements:
             output += f"\n{test_result}"
 
         return {"success": True, "output": output}
+
+    def _review_and_fix(self, code: str, path: str, goal: str) -> tuple[str, str]:
+        """Ask the model to review the generated code for logic errors, then fix if needed."""
+        ext = Path(path).suffix.lower()
+        if ext not in (".py", ".js", ".ts", ".go", ".rs"):
+            return code, ""  # only review known code types
+
+        review_prompt = (
+            f"Review this {ext[1:]} code for the goal: {goal}\n\n"
+            f"```{ext[1:]}\n{code}\n```\n\n"
+            "Check for:\n"
+            "- Logic errors or off-by-one mistakes\n"
+            "- Missing error handling\n"
+            "- Edge cases not covered (empty input, None, zero, negative numbers)\n"
+            "- Security issues (SQL injection, unvalidated input)\n"
+            "- Resource leaks (unclosed files/connections)\n\n"
+            "If the code is correct, reply with exactly: OK\n"
+            "If there are issues, reply with: ISSUES: <brief description>\n"
+            "Then provide the corrected code in a fenced block."
+        )
+        review = self._chat(review_prompt).strip()
+
+        if review.upper().startswith("OK"):
+            return code, ""
+
+        if "ISSUES:" in review.upper():
+            fixed = self._strip_fences(review)
+            if self._looks_like_code(fixed, path) and fixed != code:
+                if ext == ".py":
+                    try:
+                        import ast as _ast
+                        _ast.parse(fixed)
+                    except SyntaxError:
+                        return code, "review found issues (fix had syntax error)"
+                return fixed, "logic reviewed and fixed"
+            return code, "logic reviewed (no change)"
+
+        return code, ""
 
     def _validate_and_fix_python(self, code: str) -> tuple[str, str]:
         """Parse the code with ast. On SyntaxError, ask the model to fix it once."""
