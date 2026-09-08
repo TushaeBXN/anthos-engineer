@@ -1,98 +1,89 @@
 <div align="center">
 
-# Anthos Engineer
+# Forge by Anthos Intelligence
 
-**Standalone agentic coding system powered by your local Ollama models.**
+**Software engineering agent architecture — event-sourced system model, deny-by-default permission broker, capability executor, verification chain.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-3776ab.svg?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/downloads/)
-
-No Claude Code. No API keys. No cloud dependency. Describe what you want to build — Anthos Engineer plans it, writes the code, and runs it using Amy or any model running locally in Ollama.
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178c6.svg?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Node.js 22+](https://img.shields.io/badge/Node.js-22+-339933.svg?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
 
 </div>
 
 ---
 
-## What It Does
+## Architecture
 
-- **Intent detection** — Knows the difference between a build goal and a chat message. Greetings get a conversational reply; build requests get a full plan-execute loop.
-- **Plan → Execute → Verify** — Breaks goals into steps (write file, run command, install package), executes them in order, and streams every step live.
-- **Local-first** — Calls Ollama directly at `http://localhost:11434`. No outbound API traffic.
-- **Model picker** — Switch between amy, kerrigan-fantasma, deepseek-coder, llama3.2, or any model you have pulled.
-- **Dark web UI** — Real-time execution view with plan list, step status, log feed, and created files list.
+The LLM is replaceable. The durable platform is four things:
+
+1. **System Model** — event-sourced graph of the codebase (functions, modules, endpoints, dependencies, call/import relationships)
+2. **Permission Broker** — deny-by-default policy pipeline that normalizes every agent action into one shape before evaluating it
+3. **Capability Executor** — the only component allowed to touch the real filesystem/shell/git; agents never get raw handles
+4. **Verification Chain** — every change is checked (types, tests, lint) before being considered "done"
 
 ---
 
 ## Quick Start
 
-**Prerequisites:** Python 3.11+, [uv](https://docs.astral.sh/uv/getting-started/installation/), [Ollama](https://ollama.ai) running with at least one model pulled.
-
 ```bash
-git clone https://github.com/TushaeBXN/anthos-engineer
-cd anthos-engineer
-uv sync
-source .venv/bin/activate
-anthos-engineer
+npm install
+npx tsx cli/index.ts init
 ```
 
-Open **http://127.0.0.1:7337** in your browser.
-
-To use a different default model:
+Or install globally after building:
 
 ```bash
-ANTHOS_MODEL=deepseek-coder anthos-engineer
+npm run build
+npm link
+forge init
 ```
 
 ---
 
-## Models
+## Commands
 
-Any model available in your local Ollama installation works. The UI ships with these in the picker:
-
-| Model | Best for |
+| Command | Description |
 |---|---|
-| `amy` | General coding (default) |
-| `amy-base` | Lightweight tasks |
-| `kerrigan-fantasma` | Security research |
-| `deepseek-coder:6.7b` | Code generation |
-| `llama3.2:3b` | Fast responses |
-| `llama3.2-vision` | Image-aware tasks |
-
-Pull a model: `ollama pull <name>`
+| `forge init` | Index the repo — extract all TS nodes/edges into the event log |
+| `forge query <name>` | Show transitive dependents of a function or module |
 
 ---
 
-## Architecture
+## Build Order (MVP)
 
-```
-anthos_engineer/
-├── agent.py      # classify_intent(), AnthosEngineer (plan/execute/chat)
-├── server.py     # FastAPI + SSE streaming on port 7337
-└── static/
-    ├── index.html
-    ├── style.css
-    └── app.js
-```
-
-**Request flow:**
-
-1. User submits a goal in the web UI
-2. `POST /api/session` creates a session
-3. `GET /api/session/{id}/stream` opens an SSE connection
-4. Server calls `classify_intent()` — routes to `chat()` or full `plan()` + `execute_step()` loop
-5. Events (`status`, `plan`, `step_start`, `step_done`, `chat`, `done`) stream to the browser in real time
+- [x] **Step 1** — System Model core (`model/schema.ts`, `events.ts`, `graph.ts`, `ts-extractor.ts`, `incremental.ts`)
+- [ ] **Step 2** — Permission Broker (`policy/` — deny-by-default, glob rules, audit log)
+- [ ] **Step 3** — Capabilities + Executor (`capability/`, `executor/`)
+- [ ] **Step 4** — Verification Chain (`verify/chain.ts`)
+- [ ] **Step 5** — Semantic Diff (`diff/semantic.ts`)
+- [ ] **Step 6** — LLM integration (`forge change "<goal>"`)
 
 ---
 
-## Environment Variables
+## Project Structure
 
-| Variable | Default | Description |
-|---|---|---|
-| `ANTHOS_MODEL` | `amy` | Default Ollama model |
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server address |
+```
+model/
+├── schema.ts          # SystemNode, SystemEdge, event types
+├── events.ts          # append-only SQLite event log
+├── graph.ts           # materialized view rebuilt from events
+├── extractor.ts       # extractor interface
+├── typescript/
+│   └── ts-extractor.ts  # ts-morph extraction for functions/modules/imports/calls
+└── incremental.ts     # localInvalidation + dependencyInvalidation (lazy, cached)
+
+policy/                # Step 2 (pending)
+capability/            # Step 3 (pending)
+executor/              # Step 3 (pending)
+diff/                  # Step 5 (pending)
+verify/                # Step 4 (pending)
+
+cli/
+└── index.ts           # forge init | forge query
+```
 
 ---
 
 ## License
 
-MIT — Brian Tushae Thomas
+MIT — Brian Tushae Thomas / Anthos Intelligence

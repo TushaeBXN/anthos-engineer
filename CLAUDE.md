@@ -1,41 +1,39 @@
-# Anthos Engineer — Developer Guide
+# Forge by Anthos Intelligence — Developer Guide
 
 ## Setup
 
 ```bash
-uv sync
-source .venv/bin/activate
-anthos-engineer        # starts on http://127.0.0.1:7337
+npm install
+npx tsx cli/index.ts init      # index the repo
+npx tsx cli/index.ts query X   # query dependents of X
 ```
 
-Requires: Python 3.11+, uv, Ollama running locally.
+Requires: Node.js 22+, npm
 
-## Project Layout
+## Architecture Invariants
 
+- **No code path outside `executor/` may touch `fs` or `shell` for agent-driven changes.** The executor re-validates the capability token before every operation.
+- **Nothing writes to the materialized graph directly.** Every mutation goes through an event in `events.ts` first; `graph.ts` applies events. This keeps "why does Forge think X" answerable by log lookup.
+- **Normalization happens once.** `policy/evaluator.ts` (Step 2) normalizes an ActionRequest before matching rules. Resource-specific checks are constraint validators that plug in after the generic match — not separate per-resource logic.
+
+## Module Map
+
+| Module | Responsibility |
+|---|---|
+| `model/schema.ts` | Core types: SystemNode, SystemEdge, ForgeEventPayload |
+| `model/events.ts` | Append-only SQLite event log |
+| `model/graph.ts` | In-memory materialized view + transitive dependent lookup |
+| `model/extractor.ts` | Extractor interface |
+| `model/typescript/ts-extractor.ts` | ts-morph extraction |
+| `model/incremental.ts` | localInvalidation, dependencyInvalidation, initFromFiles |
+| `cli/index.ts` | forge init / forge query |
+
+## Event store location
+
+`.forge/events.db` in the working directory. Delete to reset.
+
+## Build
+
+```bash
+npm run build   # tsc → dist/
 ```
-anthos_engineer/
-├── agent.py      # classify_intent(), AnthosEngineer class
-├── server.py     # FastAPI app + SSE streaming
-└── static/       # index.html, style.css, app.js
-```
-
-## Key Decisions
-
-- **No proxy layer** — calls Ollama's `/v1/chat/completions` directly via httpx.
-- **Intent classification first** — every session starts with `classify_intent()` before any planning. Chat messages never enter the build loop.
-- **SSE events**: `status` → `plan` → `step_start` / `step_done` (repeated) → `done`; or `status` → `chat` → `done` for conversational input.
-- **Workspace isolation** — each session gets a `tempfile.mkdtemp(prefix="anthos-")` directory so generated files never collide.
-
-## Environment
-
-| Variable | Default | Notes |
-|---|---|---|
-| `ANTHOS_MODEL` | `amy` | Any model name known to Ollama |
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Change if Ollama runs on a different host/port |
-
-## Coding Standards
-
-- Python 3.11+, no `from __future__ import annotations`
-- Ruff for formatting and lint (`ruff format`, `ruff check --fix`)
-- No type ignores — fix the underlying issue
-- No comments explaining what the code does — only WHY if non-obvious
