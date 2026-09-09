@@ -25,6 +25,28 @@ Four invariants hold across every change:
 
 ---
 
+## How Forge Differs from Claude Code and OpenAI Codex
+
+Claude Code and Codex are excellent at generating code. Forge is built around a different question: **what happens after the LLM produces a plan?**
+
+| | Claude Code / Codex | Forge |
+|---|---|---|
+| **Codebase understanding** | Reads files on demand | Maintains a persistent, event-sourced graph of every function, module, import, and call relationship — queryable for transitive dependencies and blast radius before any change is made |
+| **Permission model** | Runs with the permissions of the current user | Deny-by-default policy broker — every action is normalized into one shape and evaluated against a YAML policy before it reaches the filesystem or shell |
+| **Filesystem access** | LLM tools call `fs` / shell directly | Agents never get raw handles — only `executor/filesystem.ts` may write files, and only after re-validating a scoped, 60-second capability token on every operation |
+| **Audit trail** | Session logs | Append-only SQLite audit log of every policy decision (allow / deny / requires_approval) with matched rule, agent id, and timestamp — immutable by design |
+| **Verification** | Optional, triggered by the user | Mandatory after every change — `tsc --noEmit → test → lint` all run before a change is considered done, even if an earlier stage fails |
+| **Blast-radius awareness** | None | Before and after every change, Forge knows exactly which nodes transitively depend on the affected functions — the semantic diff includes a blast-radius count |
+| **LLM role** | Plans and executes | Plans only — a deterministic executor runs the plan, re-validates permissions at every step, and the LLM never directly touches the filesystem or shell |
+| **Model lock-in** | Claude (Claude Code) / OpenAI (Codex) | Model-agnostic — swap the model in `ANTHROPIC_MODEL` env var; the permission, execution, and verification layers are independent of which LLM planned the change |
+| **Policy ownership** | Controlled by the tool vendor | A `forge.policy.yaml` you own and version-control alongside your code |
+
+### The core difference in one sentence
+
+Claude Code and Codex trust the LLM to make safe decisions. Forge treats the LLM as an untrusted planner and enforces safety at the execution layer — the same way you would enforce it for any other untrusted process on your system.
+
+---
+
 ## Quick Start
 
 ```bash
