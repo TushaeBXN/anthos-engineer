@@ -6,11 +6,18 @@
 npm install
 npx tsx cli/index.ts init                              # index the repo
 npx tsx cli/index.ts query X                           # query dependents of X
-export ANTHROPIC_API_KEY=sk-...
+
+# Anthropic (default)
+export FORGE_PROVIDER=anthropic ANTHROPIC_API_KEY=sk-ant-...
+# OpenAI
+export FORGE_PROVIDER=openai OPENAI_API_KEY=sk-...
+# Ollama (local, no key needed)
+export FORGE_PROVIDER=ollama FORGE_MODEL=llama3.1:70b
+
 npx tsx cli/index.ts change "add a health endpoint"    # LLM-driven change
 ```
 
-Requires: Node.js 22+, npm, `ANTHROPIC_API_KEY` for `forge change`.
+Requires: Node.js 22+, npm. For `forge change`: set `FORGE_PROVIDER` and the matching API key (Ollama needs no key).
 
 ## Architecture Invariants
 
@@ -37,7 +44,10 @@ Requires: Node.js 22+, npm, `ANTHROPIC_API_KEY` for `forge change`.
 | `executor/shell.ts` | Whitelisted shell commands via capability token |
 | `verify/chain.ts` | tsc → test → lint pipeline, all stages run even on failure |
 | `diff/semantic.ts` | Graph events → human-readable grouped diff + blast radius |
-| `llm/planner.ts` | Build system summary, call Claude API, parse structured plan |
+| `llm/schema.ts` | Shared Plan types + JSON Schema for propose_plan tool |
+| `llm/planner.ts` | Provider selection (FORGE_PROVIDER), system summary, dispatch to provider |
+| `llm/providers/anthropic.ts` | Anthropic SDK provider |
+| `llm/providers/openai-compatible.ts` | OpenAI-compatible provider (OpenAI, Ollama, Groq, Together, LM Studio, …) |
 | `cli/index.ts` | forge init / forge query / forge change |
 
 ## Event store location

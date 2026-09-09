@@ -38,7 +38,7 @@ Claude Code and Codex are excellent at generating code. Forge is built around a 
 | **Verification** | Optional, triggered by the user | Mandatory after every change — `tsc --noEmit → test → lint` all run before a change is considered done, even if an earlier stage fails |
 | **Blast-radius awareness** | None | Before and after every change, Forge knows exactly which nodes transitively depend on the affected functions — the semantic diff includes a blast-radius count |
 | **LLM role** | Plans and executes | Plans only — a deterministic executor runs the plan, re-validates permissions at every step, and the LLM never directly touches the filesystem or shell |
-| **Model lock-in** | Claude (Claude Code) / OpenAI (Codex) | Model-agnostic — swap the model in `ANTHROPIC_MODEL` env var; the permission, execution, and verification layers are independent of which LLM planned the change |
+| **Model lock-in** | Claude (Claude Code) / OpenAI (Codex) | Model-agnostic — drop in any provider via `FORGE_PROVIDER`; the permission, execution, and verification layers are independent of which LLM planned the change |
 | **Policy ownership** | Controlled by the tool vendor | A `forge.policy.yaml` you own and version-control alongside your code |
 
 ### The core difference in one sentence
@@ -51,12 +51,11 @@ Claude Code and Codex trust the LLM to make safe decisions. Forge treats the LLM
 
 ```bash
 npm install
-export ANTHROPIC_API_KEY=sk-ant-...
 
 # Index the repo
 npx tsx cli/index.ts init
 
-# Ask Forge to make a change
+# Ask Forge to make a change (uses whichever provider you configure — see below)
 npx tsx cli/index.ts change "add a health check endpoint"
 
 # Query what depends on something
@@ -69,6 +68,52 @@ Or install globally after building:
 npm run build && npm link
 forge init
 forge change "add a health check endpoint"
+```
+
+---
+
+## Choosing Your LLM
+
+Forge works with any model that supports function calling / tool use. Set two env vars and you're done — the permission broker, executor, verification chain, and semantic diff all run identically no matter which model planned the change.
+
+| Provider | `FORGE_PROVIDER` | Key env var | `FORGE_BASE_URL` |
+|---|---|---|---|
+| **Anthropic** (default) | `anthropic` | `ANTHROPIC_API_KEY` | — |
+| **OpenAI** | `openai` | `OPENAI_API_KEY` | — |
+| **Ollama** (local) | `ollama` | — | auto-set to `http://localhost:11434/v1` |
+| **Groq** | `groq` | `OPENAI_API_KEY` | `https://api.groq.com/openai/v1` |
+| **Together AI** | `together` | `OPENAI_API_KEY` | `https://api.together.xyz/v1` |
+| **LM Studio** | `lmstudio` | — | `http://localhost:1234/v1` |
+| **Any OpenAI-compatible** | any string | `OPENAI_API_KEY` | your endpoint URL |
+
+Override the model name with `FORGE_MODEL`:
+
+```bash
+# Anthropic
+export FORGE_PROVIDER=anthropic
+export ANTHROPIC_API_KEY=sk-ant-...
+export FORGE_MODEL=claude-sonnet-5   # default: claude-opus-5
+
+# OpenAI
+export FORGE_PROVIDER=openai
+export OPENAI_API_KEY=sk-...
+export FORGE_MODEL=gpt-4o            # default: gpt-4o
+
+# Ollama — no API key needed; pull the model first
+export FORGE_PROVIDER=ollama
+export FORGE_MODEL=llama3.1:70b
+ollama pull llama3.1:70b
+
+# Groq (fast hosted inference)
+export FORGE_PROVIDER=groq
+export OPENAI_API_KEY=gsk_...
+export FORGE_BASE_URL=https://api.groq.com/openai/v1
+export FORGE_MODEL=llama-3.3-70b-versatile
+
+# LM Studio
+export FORGE_PROVIDER=lmstudio
+export FORGE_BASE_URL=http://localhost:1234/v1
+export FORGE_MODEL=your-loaded-model
 ```
 
 ---
