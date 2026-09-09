@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import yaml from "js-yaml";
+import { load as yamlLoad } from "js-yaml";
 import type { ForgePolicy, PolicyRule } from "./schema.js";
 
 const POLICY_FILE = "forge.policy.yaml";
@@ -13,7 +13,7 @@ export function loadPolicy(policyPath?: string): ForgePolicy {
     return { version: 1, default: "deny", rules: [] };
   }
 
-  const raw = yaml.load(fs.readFileSync(filePath, "utf8")) as Record<string, unknown>;
+  const raw = yamlLoad(fs.readFileSync(filePath, "utf8")) as Record<string, unknown>;
 
   if (!raw || typeof raw !== "object") {
     throw new Error(`Invalid policy file: ${filePath}`);

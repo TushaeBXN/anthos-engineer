@@ -12,6 +12,7 @@
     "forge": "./dist/cli/index.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.124.0",
     "@types/js-yaml": "^4.0.9",
     "better-sqlite3": "^9.6.0",
     "glob": "^11.0.0",

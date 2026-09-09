@@ -1,10 +1,19 @@
 #!/usr/bin/env node
 import { glob } from "glob";
 import path from "node:path";
-import { resetDb } from "../model/events.js";
+import readline from "node:readline/promises";
+import { resetDb, getLatestEventId, getEventsSince } from "../model/events.js";
 import { resetGraph, getGraph } from "../model/graph.js";
-import { initFromFiles, dependencyInvalidation } from "../model/incremental.js";
+import { initFromFiles, localInvalidation, dependencyInvalidation, rebuildGraph } from "../model/incremental.js";
 import { TypeScriptExtractor } from "../model/typescript/ts-extractor.js";
+import { loadPolicy } from "../policy/parser.js";
+import { evaluate } from "../policy/evaluator.js";
+import { issueCapability } from "../capability/issuer.js";
+import { writeFile } from "../executor/filesystem.js";
+import { runVerificationChain, printChainResult } from "../verify/chain.js";
+import { computeSemanticDiff, printSemanticDiff } from "../diff/semantic.js";
+import { planChange } from "../llm/planner.js";
+import type { ActionRequest } from "../policy/schema.js";
 
 const BANNER = "Forge by Anthos Intelligence";
 const SEP = "─".repeat(44);
@@ -13,7 +22,8 @@ function usage(): void {
   console.log(`\n${BANNER}\n${SEP}`);
   console.log("Commands:");
   console.log("  forge init              Index the current repo");
-  console.log("  forge query <nodeId>    Show transitive dependents of a node\n");
+  console.log("  forge query <nodeId>    Show transitive dependents of a node");
+  console.log("  forge change <goal>     Plan, approve, and execute a change via LLM\n");
 }
 
 async function cmdInit(): Promise<void> {
@@ -149,6 +159,120 @@ function runQuery(nodeId: string): void {
   console.log();
 }
 
+async function cmdChange(goal: string): Promise<void> {
+  // 1. Ensure graph is populated
+  rebuildGraph();
+  const graph = getGraph();
+  if (graph.nodeCount() === 0) {
+    console.error("System model is empty — run `forge init` first.");
+    process.exit(1);
+  }
+
+  console.log(`\n${BANNER}`);
+  console.log(SEP);
+  console.log(`Goal: ${goal}\n`);
+
+  // 2. Plan via LLM
+  process.stdout.write("Planning…");
+  let plan;
+  try {
+    plan = await planChange(goal, graph);
+  } catch (err) {
+    process.stdout.write("\n");
+    console.error("Planning failed:", (err as Error).message);
+    process.exit(1);
+  }
+  process.stdout.write(" done.\n\n");
+
+  // 3. Evaluate each operation against policy
+  const policy = loadPolicy();
+  const agentId = "forge-agent";
+  const sessionId = crypto.randomUUID();
+
+  const evaluated = plan.operations.map((op) => {
+    const req: ActionRequest = {
+      resource: "filesystem",
+      operation: "write",
+      target: op.filePath,
+      agentId,
+      sessionId,
+    };
+    const decision = evaluate(req, policy);
+    return { op, req, decision };
+  });
+
+  // 4. Display proposed changes
+  console.log("PROPOSED PLAN");
+  console.log(SEP);
+  console.log(`Rationale: ${plan.rationale}\n`);
+
+  for (const { op, decision } of evaluated) {
+    const icon = decision.decision === "allow" ? "✓" : decision.decision === "requires_approval" ? "?" : "✗";
+    console.log(`  ${icon} ${op.operation.toUpperCase().padEnd(7)} ${op.filePath}`);
+    console.log(`    ${op.rationale}`);
+    console.log(`    Policy: ${decision.decision}`);
+  }
+  console.log();
+
+  // 5. Abort if anything is denied
+  const denied = evaluated.filter((e) => e.decision.decision === "deny");
+  if (denied.length > 0) {
+    console.error(`${denied.length} operation(s) denied by policy:\n`);
+    for (const { op, decision } of denied) {
+      console.error(`  ✗ ${op.filePath} — ${decision.reason}`);
+    }
+    process.exit(1);
+  }
+
+  // 6. User approval
+  console.log(SEP);
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  const answer = await rl.question("Proceed? [y/N] ");
+  rl.close();
+
+  if (answer.trim().toLowerCase() !== "y") {
+    console.log("\nAborted.\n");
+    process.exit(0);
+  }
+
+  // 7. Execute via Capability Executor, collecting events for semantic diff
+  console.log("\nWriting files…");
+  const extractor = new TypeScriptExtractor();
+  const changeEvents: ReturnType<typeof getEventsSince> = [];
+
+  for (const { op, decision } of evaluated) {
+    const cap = issueCapability(decision, 60);
+    const result = await writeFile(cap.id, op.filePath, op.content);
+    if (!result.success) {
+      console.error(`  ✗ ${op.filePath}: ${result.error}`);
+      continue;
+    }
+    console.log(`  ✓ ${op.filePath}`);
+
+    // Re-extract to emit graph events for this file
+    const beforeId = getLatestEventId();
+    try {
+      await localInvalidation(op.filePath, extractor);
+    } catch {
+      // Non-fatal — graph stays consistent, diff may be incomplete
+    }
+    changeEvents.push(...getEventsSince(beforeId));
+  }
+
+  // 8. Verify
+  console.log();
+  const chainResult = await runVerificationChain(process.cwd());
+  printChainResult(chainResult);
+
+  // 9. Semantic diff
+  const diff = computeSemanticDiff(changeEvents, getGraph());
+  printSemanticDiff(diff);
+
+  if (!chainResult.passed) {
+    process.exit(1);
+  }
+}
+
 // ── Main ──
 const [, , command, ...args] = process.argv;
 
@@ -166,6 +290,16 @@ if (!command || command === "help" || command === "--help" || command === "-h") 
     process.exit(1);
   }
   cmdQuery(nodeId).catch((err) => {
+    console.error("Error:", (err as Error).message);
+    process.exit(1);
+  });
+} else if (command === "change") {
+  const goal = args.join(" ");
+  if (!goal) {
+    console.error('Usage: forge change "<goal>"');
+    process.exit(1);
+  }
+  cmdChange(goal).catch((err) => {
     console.error("Error:", (err as Error).message);
     process.exit(1);
   });
