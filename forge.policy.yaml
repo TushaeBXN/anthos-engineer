@@ -1,0 +1,73 @@
+version: 1
+default: deny
+
+rules:
+  # Hard deny: SSH directory is never writable by any agent
+  - id: deny-ssh-writes
+    resource: filesystem
+    operation: write
+    target: "~/.ssh/**"
+    effect: deny
+
+  # Hard deny: credentials and secrets
+  - id: deny-secrets-writes
+    resource: filesystem
+    operation: write
+    target: "~/.aws/**"
+    effect: deny
+
+  # Allow: agents may read any file
+  - id: allow-all-reads
+    resource: filesystem
+    operation: read
+    target: "**"
+    effect: allow
+
+  # Allow: agents may write within src/
+  - id: allow-src-writes
+    resource: filesystem
+    operation: write
+    target: "src/**"
+    effect: allow
+
+  # Allow: agents may write within model/, policy/, capability/, executor/, diff/, verify/, cli/
+  - id: allow-forge-module-writes
+    resource: filesystem
+    operation: write
+    target: "{model,policy,capability,executor,diff,verify,cli}/**"
+    effect: allow
+
+  # Allow: test runner
+  - id: allow-test-runner
+    resource: shell
+    operation: npm test
+    target: "*"
+    effect: allow
+
+  # Allow: type checker
+  - id: allow-tsc
+    resource: shell
+    operation: npx tsc
+    target: "*"
+    effect: allow
+
+  # Requires approval: git push (resolved from both git.push and shell: "git push")
+  - id: require-approval-git-push
+    resource: git
+    operation: push
+    target: "**"
+    effect: allow
+    requires_approval: true
+
+  # Allow: other git read operations
+  - id: allow-git-reads
+    resource: git
+    operation: status
+    target: "**"
+    effect: allow
+
+  - id: allow-git-log
+    resource: git
+    operation: log
+    target: "**"
+    effect: allow

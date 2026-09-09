@@ -5,14 +5,18 @@
   "type": "module",
   "scripts": {
     "build": "tsc",
-    "dev": "tsx cli/index.ts"
+    "dev": "tsx cli/index.ts",
+    "test": "node --import tsx/esm --test tests/**/*.test.ts"
   },
   "bin": {
     "forge": "./dist/cli/index.js"
   },
   "dependencies": {
+    "@types/js-yaml": "^4.0.9",
     "better-sqlite3": "^9.6.0",
     "glob": "^11.0.0",
+    "js-yaml": "^5.4.1",
+    "minimatch": "^10.2.6",
     "ts-morph": "^23.0.0"
   },
   "devDependencies": {
