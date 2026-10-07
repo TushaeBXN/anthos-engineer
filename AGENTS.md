@@ -37,3 +37,24 @@ Requires: Node.js 22+, npm
 ```bash
 npm run build   # tsc → dist/
 ```
+
+## Git workflow (follow in order)
+
+1. Check the current branch. Never work on `main` or `master`.
+2. Create a branch named `forge/<short-description>` (lowercase, hyphens only).
+3. Make the smallest change that solves the goal. Touch only files listed in your plan.
+4. Verification must pass (`tsc`, tests, lint) before you commit. If it fails,
+   fix it. After 3 failed attempts, stop and report what failed.
+5. Review your own diff. Remove debug logging, commented-out code, and unrelated edits.
+6. Commit with a message: a short summary line (what), then a sentence on why.
+   Stage only the files you wrote — never `git add -A`.
+7. Push the branch only. Pushing requires human approval.
+8. Open a PR describing the change, how it was verified, and its blast radius.
+
+**Never:** force-push, push to `main`/`master`, commit secrets or `.env` files,
+edit `.git/`, merge your own PR, or skip verification.
+
+If you are unsure, stop and ask. Stopping is always acceptable; guessing is not.
+
+All git operations route through `executor/git.ts`, which enforces these rules
+at the execution layer in addition to policy evaluation.
