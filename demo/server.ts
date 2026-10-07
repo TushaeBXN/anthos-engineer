@@ -52,7 +52,7 @@ function pushEvent(id: string, data: object): void {
 }
 
 // ── Worker runner ─────────────────────────────────────────────────────────────
-async function runSession(sessionId: string, goal: string): Promise<void> {
+async function runSession(sessionId: string, goal: string, provider?: string, model?: string): Promise<void> {
   let sandboxDir: string | null = null;
 
   try {
@@ -64,7 +64,11 @@ async function runSession(sessionId: string, goal: string): Promise<void> {
         process.execPath,
         ["--import", "tsx/esm", WORKER, goal, sandboxDir!],
         {
-          env: { ...process.env },
+          env: {
+            ...process.env,
+            ...(provider ? { FORGE_PROVIDER: provider } : {}),
+            ...(model ? { FORGE_MODEL: model } : {}),
+          },
           timeout: 3 * 60 * 1000,
         },
       );
@@ -135,8 +139,13 @@ const server = createServer((req, res) => {
     req.on("data", (chunk) => { body += chunk; });
     req.on("end", () => {
       let goal = "";
+      let provider: string | undefined;
+      let model: string | undefined;
       try {
-        goal = (JSON.parse(body) as { goal?: string }).goal?.trim() ?? "";
+        const parsed = JSON.parse(body) as { goal?: string; provider?: string; model?: string };
+        goal = parsed.goal?.trim() ?? "";
+        provider = parsed.provider?.trim() || undefined;
+        model = parsed.model?.trim() || undefined;
       } catch {
         res.writeHead(400, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "Invalid JSON" }));
@@ -156,7 +165,7 @@ const server = createServer((req, res) => {
 
       const sessionId = randomUUID();
       sessions.set(sessionId, { events: [], done: false, listeners: new Set() });
-      runSession(sessionId, goal); // fire and forget
+      runSession(sessionId, goal, provider, model); // fire and forget
 
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ sessionId }));
