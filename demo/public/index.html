@@ -1,838 +1,765 @@
 <title>Forge</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap">
 <style>
-/* ── Design tokens ───────────────────────────────────────────────────────── */
+/* ── Tokens ── */
 :root {
-  --bg:        #0d1117;
-  --bg-2:      #161b22;
-  --bg-3:      #21262d;
-  --border:    #30363d;
-  --fg:        #e6edf3;
-  --fg-muted:  #8b949e;
-  --green:     #3fb950;
-  --green-dim: #1a4a23;
-  --amber:     #d29922;
-  --amber-dim: #3d2e00;
-  --red:       #f85149;
-  --red-dim:   #3d0e0a;
-  --blue:      #58a6ff;
-  --blue-dim:  #0d2044;
-  --purple:    #bc8cff;
-  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
-  --font-ui:   'Inter', system-ui, sans-serif;
+  --bg:          #05080f;
+  --bg-card:     #0b1120;
+  --bg-hover:    #0f1828;
+  --border:      #1c2d45;
+  --border-lit:  #2a4566;
+  --fg:          #ddeeff;
+  --fg-2:        #8ba4be;
+  --fg-3:        #4a6480;
+  --green:       #00e5a0;
+  --green-dim:   rgba(0,229,160,.08);
+  --green-glow:  rgba(0,229,160,.18);
+  --amber:       #f5c518;
+  --amber-dim:   rgba(245,197,24,.08);
+  --red:         #ff4d6a;
+  --red-dim:     rgba(255,77,106,.08);
+  --blue:        #4da6ff;
+  --blue-dim:    rgba(77,166,255,.08);
+  --purple:      #c084fc;
+  --font-display: 'Syne', system-ui, sans-serif;
+  --font-mono:    'JetBrains Mono', monospace;
+  --font-ui:      'Inter', system-ui, sans-serif;
   color-scheme: dark;
 }
-
-/* single-theme dark-first design */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
 body {
-  margin: 0;
   background: var(--bg);
   color: var(--fg);
   font-family: var(--font-ui);
   font-size: 14px;
   line-height: 1.6;
-  min-height: 100%;
+  overflow-x: hidden;
 }
 
-*, *::before, *::after { box-sizing: border-box; }
+/* ── Radial spotlight behind hero ── */
+.spotlight {
+  position: fixed;
+  top: -200px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 900px;
+  height: 600px;
+  background: radial-gradient(ellipse at 50% 30%, rgba(0,229,160,.06) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
 
-/* ── Layout ─────────────────────────────────────────────────────────────── */
+/* ── Layout ── */
 .shell {
-  max-width: 860px;
+  position: relative;
+  z-index: 1;
+  max-width: 800px;
   margin: 0 auto;
-  padding: 40px 24px 80px;
+  padding: 60px 24px 100px;
 }
 
-/* ── Header ─────────────────────────────────────────────────────────────── */
-.header {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  margin-bottom: 6px;
-}
-
-.wordmark {
-  font-family: var(--font-mono);
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--green);
-  letter-spacing: -0.5px;
-}
-
-.wordmark span { color: var(--fg-muted); font-weight: 400; }
-
-.tagline {
-  font-size: 12px;
-  color: var(--fg-muted);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-/* ── Input area ─────────────────────────────────────────────────────────── */
-.prompt-area {
-  margin: 32px 0 0;
-}
-
-.prompt-label {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--fg-muted);
-  margin-bottom: 8px;
+/* ── Header ── */
+.topbar {
   display: flex;
   align-items: center;
+  gap: 10px;
+  margin-bottom: 72px;
+}
+.logo-mark {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--green);
+  letter-spacing: -0.3px;
+  border: 1px solid var(--border-lit);
+  border-radius: 5px;
+  padding: 3px 9px;
+  background: var(--green-dim);
+}
+.logo-by {
+  font-size: 12px;
+  color: var(--fg-3);
+}
+.topbar-right {
+  margin-left: auto;
+  display: flex;
   gap: 6px;
 }
+.pill-link {
+  font-size: 12px;
+  color: var(--fg-3);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 3px 11px;
+  text-decoration: none;
+  transition: color .15s, border-color .15s;
+}
+.pill-link:hover { color: var(--fg); border-color: var(--border-lit); }
 
-.prompt-label::before {
-  content: '>';
+/* ── Hero ── */
+.hero { margin-bottom: 56px; }
+.hero-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
   color: var(--green);
-  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.hero-eyebrow::before {
+  content: '';
+  display: inline-block;
+  width: 24px;
+  height: 1px;
+  background: var(--green);
+}
+.hero-title {
+  font-family: var(--font-display);
+  font-size: clamp(36px, 7vw, 58px);
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -1.5px;
+  color: var(--fg);
+  margin-bottom: 18px;
+  text-wrap: balance;
+}
+.hero-title .accent { color: var(--green); }
+.hero-sub {
+  font-size: 15px;
+  color: var(--fg-2);
+  max-width: 520px;
+  line-height: 1.7;
+  margin-bottom: 28px;
+}
+.hero-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.badge {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  color: var(--fg-2);
+  background: var(--bg-card);
+}
+.badge.green { border-color: rgba(0,229,160,.3); color: var(--green); background: var(--green-dim); }
+.badge.blue  { border-color: rgba(77,166,255,.3); color: var(--blue);  background: var(--blue-dim);  }
+
+/* ── Divider ── */
+.divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border-lit) 30%, var(--border-lit) 70%, transparent);
+  margin-bottom: 40px;
 }
 
-.prompt-row {
+/* ── Goal input ── */
+.input-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--fg-3);
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+.input-row {
   display: flex;
   gap: 8px;
   align-items: stretch;
+  margin-bottom: 10px;
 }
-
-.prompt-input {
+.goal-input {
   flex: 1;
-  background: var(--bg-2);
+  background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 10px 14px;
-  font-family: var(--font-mono);
-  font-size: 14px;
-  color: var(--fg);
-  outline: none;
-  transition: border-color 0.15s;
-  min-width: 0;
-}
-
-.prompt-input:focus { border-color: var(--green); }
-.prompt-input::placeholder { color: var(--fg-muted); }
-.prompt-input:disabled { opacity: 0.5; cursor: not-allowed; }
-
-.run-btn {
-  background: var(--green);
-  color: #0d1117;
-  border: none;
-  border-radius: 6px;
-  padding: 10px 20px;
+  border-radius: 8px;
+  padding: 12px 16px;
   font-family: var(--font-mono);
   font-size: 13px;
-  font-weight: 700;
+  color: var(--fg);
+  outline: none;
+  min-width: 0;
+  transition: border-color .2s, box-shadow .2s;
+}
+.goal-input:focus {
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px var(--green-glow);
+}
+.goal-input::placeholder { color: var(--fg-3); }
+.goal-input:disabled { opacity: .45; }
+.run-btn {
+  background: var(--green);
+  color: #050a0d;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 22px;
   cursor: pointer;
   white-space: nowrap;
-  transition: opacity 0.15s;
+  transition: opacity .15s, box-shadow .15s;
 }
-
-.run-btn:hover:not(:disabled) { opacity: 0.85; }
-.run-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-
+.run-btn:hover:not(:disabled) {
+  opacity: .88;
+  box-shadow: 0 0 20px var(--green-glow);
+}
+.run-btn:disabled { opacity: .35; cursor: not-allowed; }
 .suggestions {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-top: 10px;
 }
-
-.suggestion {
-  background: var(--bg-3);
+.sug {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--fg-3);
+  background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 4px;
   padding: 4px 10px;
-  font-size: 12px;
-  font-family: var(--font-mono);
-  color: var(--fg-muted);
   cursor: pointer;
-  transition: color 0.15s, border-color 0.15s;
+  transition: color .15s, border-color .15s;
 }
+.sug:hover { color: var(--fg-2); border-color: var(--border-lit); }
 
-.suggestion:hover { color: var(--fg); border-color: var(--fg-muted); }
-
-/* ── Pipeline ───────────────────────────────────────────────────────────── */
+/* ── Pipeline ── */
 .pipeline {
-  margin-top: 36px;
+  margin-top: 40px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
 }
 
 .step {
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 10px;
   overflow: hidden;
-  transition: border-color 0.2s;
+  transition: border-color .2s;
+  background: var(--bg-card);
 }
+.step.running { border-color: var(--amber); box-shadow: 0 0 12px rgba(245,197,24,.07); }
+.step.passed  { border-color: rgba(0,229,160,.35); }
+.step.failed  { border-color: rgba(255,77,106,.35); }
 
-.step.running { border-color: var(--amber); }
-.step.passed  { border-color: var(--green); }
-.step.failed  { border-color: var(--red); }
-
-.step-header {
+.step-hd {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  background: var(--bg-2);
+  gap: 12px;
+  padding: 12px 16px;
   cursor: pointer;
   user-select: none;
 }
-
-.step-icon {
-  width: 18px;
-  text-align: center;
+.step-num {
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 11px;
+  font-weight: 600;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
+  border: 1px solid var(--border);
+  color: var(--fg-3);
+  transition: background .2s, border-color .2s, color .2s;
 }
-
-.step.pending  .step-icon { color: var(--fg-muted); }
-.step.running  .step-icon { color: var(--amber); }
-.step.passed   .step-icon { color: var(--green); }
-.step.failed   .step-icon { color: var(--red); }
+.step.running .step-num { border-color: var(--amber);  color: var(--amber);  background: var(--amber-dim); }
+.step.passed  .step-num { border-color: var(--green);  color: var(--green);  background: var(--green-dim); }
+.step.failed  .step-num { border-color: var(--red);    color: var(--red);    background: var(--red-dim);   }
 
 .step-name {
-  font-family: var(--font-mono);
   font-size: 13px;
   font-weight: 500;
+  color: var(--fg-2);
   flex: 1;
-  color: var(--fg);
+  transition: color .2s;
 }
+.step.running .step-name,
+.step.passed  .step-name,
+.step.failed  .step-name { color: var(--fg); }
 
-.step.pending .step-name { color: var(--fg-muted); }
-
-.step-badge {
+.step-status {
   font-family: var(--font-mono);
   font-size: 11px;
-  padding: 2px 7px;
+  padding: 2px 8px;
   border-radius: 3px;
-  flex-shrink: 0;
 }
-
-.step-duration {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--fg-muted);
-}
+.step.running .step-status { color: var(--amber); }
+.step.passed  .step-status { color: var(--green); }
+.step.failed  .step-status { color: var(--red); }
 
 .step-body {
-  padding: 0 14px;
-  max-height: 0;
   overflow: hidden;
-  transition: max-height 0.25s ease, padding 0.25s ease;
+  max-height: 0;
+  transition: max-height .3s ease, padding .3s ease;
 }
-
 .step.open .step-body {
-  padding: 10px 14px 12px;
   max-height: 1200px;
+  padding: 0 16px 14px;
 }
 
-/* ── Step content blocks ────────────────────────────────────────────────── */
-.info-row {
+/* ── Body content ── */
+.kv-row {
   display: flex;
-  gap: 24px;
   flex-wrap: wrap;
+  gap: 6px 24px;
   font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--fg-muted);
-  margin-bottom: 4px;
+  font-size: 11px;
+  color: var(--fg-3);
+  margin-bottom: 8px;
 }
+.kv-row span { color: var(--fg); }
 
-.info-row strong { color: var(--fg); }
+.item-list { list-style: none; display: flex; flex-direction: column; gap: 5px; }
 
-.plan-rationale {
-  font-size: 13px;
-  color: var(--fg-muted);
-  margin-bottom: 10px;
-  font-style: italic;
-}
-
-.op-list, .policy-list, .cap-list, .file-list, .diff-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.op-item, .policy-item, .cap-item, .file-item {
+.op-row {
   display: flex;
   align-items: baseline;
   gap: 8px;
   font-family: var(--font-mono);
   font-size: 12px;
 }
-
-.op-tag {
+.op-badge {
   font-size: 10px;
-  font-weight: 700;
-  padding: 1px 5px;
-  border-radius: 3px;
+  font-weight: 600;
   text-transform: uppercase;
-  flex-shrink: 0;
-}
-
-.op-tag.create { background: var(--green-dim); color: var(--green); }
-.op-tag.modify { background: var(--blue-dim);  color: var(--blue); }
-.op-tag.delete { background: var(--red-dim);   color: var(--red); }
-
-.op-file { color: var(--fg); }
-.op-rationale { color: var(--fg-muted); font-size: 11px; margin-left: 42px; }
-
-.decision-badge {
-  font-size: 10px;
-  font-weight: 700;
   padding: 1px 6px;
   border-radius: 3px;
   flex-shrink: 0;
 }
+.op-badge.create { background: var(--green-dim); color: var(--green); border: 1px solid rgba(0,229,160,.2); }
+.op-badge.modify { background: var(--blue-dim);  color: var(--blue);  border: 1px solid rgba(77,166,255,.2); }
 
-.decision-badge.allow             { background: var(--green-dim); color: var(--green); }
-.decision-badge.requires_approval { background: var(--amber-dim); color: var(--amber); }
-.decision-badge.deny              { background: var(--red-dim);   color: var(--red); }
-
-.policy-file { color: var(--fg); flex: 1; }
-.policy-rule { color: var(--fg-muted); font-size: 11px; }
-
-.cap-id     { color: var(--purple); }
-.cap-scope  { color: var(--fg-muted); }
-.cap-ttl    { color: var(--amber); margin-left: auto; }
-
-.file-icon   { color: var(--green); }
-.file-path   { color: var(--fg); }
-.file-bytes  { color: var(--fg-muted); margin-left: auto; }
-
-/* verification stages */
-.verify-stages {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+.d-badge {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 3px;
+  flex-shrink: 0;
 }
+.d-badge.allow   { background: var(--green-dim); color: var(--green); border: 1px solid rgba(0,229,160,.2); }
+.d-badge.deny    { background: var(--red-dim);   color: var(--red);   border: 1px solid rgba(255,77,106,.2); }
+.d-badge.req     { background: var(--amber-dim); color: var(--amber); border: 1px solid rgba(245,197,24,.2); }
 
-.verify-stage {
+.token-row {
+  font-family: var(--font-mono);
+  font-size: 11px;
   display: flex;
+  align-items: center;
   gap: 8px;
-  align-items: flex-start;
+  padding: 5px 10px;
+  background: rgba(200,84,252,.05);
+  border: 1px solid rgba(192,132,252,.15);
+  border-radius: 5px;
+  margin-bottom: 4px;
+}
+.token-id { color: var(--purple); font-weight: 600; }
+.token-scope { color: var(--fg-3); flex: 1; }
+.token-ttl { color: var(--amber); }
+
+.file-row {
   font-family: var(--font-mono);
   font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--fg-2);
 }
+.file-plus { color: var(--green); }
+.file-bytes { color: var(--fg-3); margin-left: auto; }
 
-.vs-icon  { width: 16px; flex-shrink: 0; }
-.vs-name  { width: 50px; flex-shrink: 0; color: var(--fg); }
-.vs-time  { color: var(--fg-muted); }
-.vs-skip  { color: var(--fg-muted); font-style: italic; }
-.vs-error {
-  margin-top: 4px;
-  margin-left: 24px;
-  padding: 6px 10px;
+.vstages { display: flex; flex-direction: column; gap: 8px; }
+.vstage-row { display: flex; align-items: flex-start; gap: 10px; font-family: var(--font-mono); font-size: 12px; }
+.vstage-ico { width: 14px; flex-shrink: 0; }
+.vstage-name { width: 46px; color: var(--fg); flex-shrink: 0; }
+.vstage-ms { color: var(--fg-3); }
+.vstage-skip { color: var(--fg-3); font-style: italic; }
+.vstage-err {
+  margin: 4px 0 0 24px;
+  padding: 8px 12px;
   background: var(--red-dim);
-  border-radius: 4px;
+  border: 1px solid rgba(255,77,106,.2);
+  border-radius: 6px;
   color: var(--red);
   font-size: 11px;
   white-space: pre-wrap;
   word-break: break-all;
 }
 
-/* diff groups */
-.diff-group { margin-bottom: 10px; }
-.diff-group-name {
+.diff-grp { margin-bottom: 12px; }
+.diff-grp-name {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
-  color: var(--fg-muted);
+  letter-spacing: .09em;
   text-transform: uppercase;
-  letter-spacing: 0.07em;
-  margin-bottom: 4px;
+  color: var(--fg-3);
+  margin-bottom: 5px;
 }
-
-.diff-change {
+.diff-line {
   font-family: var(--font-mono);
   font-size: 12px;
   display: flex;
-  gap: 6px;
+  gap: 7px;
 }
+.diff-line.added .diff-sign   { color: var(--green); }
+.diff-line.removed .diff-sign { color: var(--red); }
+.diff-line .diff-name { color: var(--fg); }
+.diff-line .diff-file { color: var(--fg-3); font-size: 11px; }
 
-.diff-change.added   .diff-sign { color: var(--green); }
-.diff-change.removed .diff-sign { color: var(--red); }
-.diff-change .diff-name { color: var(--fg); }
-.diff-change .diff-file { color: var(--fg-muted); font-size: 11px; }
-
-.blast-row {
-  margin-top: 10px;
+.blast-stat {
+  margin-top: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-family: var(--font-mono);
   font-size: 12px;
-  color: var(--fg-muted);
+  padding: 6px 12px;
+  background: var(--amber-dim);
+  border: 1px solid rgba(245,197,24,.2);
+  border-radius: 5px;
+}
+.blast-stat .num { color: var(--amber); font-size: 15px; font-weight: 600; }
+.blast-stat .lbl { color: var(--fg-3); }
+
+.rationale {
+  font-size: 13px;
+  color: var(--fg-3);
+  font-style: italic;
+  margin-bottom: 10px;
+  padding-left: 10px;
+  border-left: 2px solid var(--border-lit);
 }
 
-.blast-row strong { color: var(--amber); }
-
-/* spinner */
-@keyframes spin { to { transform: rotate(360deg); } }
-.spin { display: inline-block; animation: spin 0.8s linear infinite; }
-
-/* ── Empty / error states ────────────────────────────────────────────────── */
-.empty-state {
-  margin-top: 48px;
+/* ── Empty state ── */
+.empty {
+  margin-top: 44px;
+  padding: 32px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
   text-align: center;
-  color: var(--fg-muted);
+  color: var(--fg-3);
   font-size: 13px;
   line-height: 2;
 }
-
-.empty-state .glyph {
+.empty code {
   font-family: var(--font-mono);
-  font-size: 32px;
-  color: var(--border);
-  display: block;
-  margin-bottom: 8px;
+  color: var(--fg-2);
+  background: var(--bg-card);
+  padding: 1px 6px;
+  border-radius: 3px;
 }
 
-/* ── How it works ────────────────────────────────────────────────────────── */
-.how-it-works {
+/* ── Flow diagram ── */
+.how {
   margin-top: 56px;
+  padding-top: 32px;
   border-top: 1px solid var(--border);
-  padding-top: 28px;
 }
-
-.how-title {
+.how-label {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
-  color: var(--fg-muted);
+  letter-spacing: .1em;
   text-transform: uppercase;
-  letter-spacing: 0.07em;
+  color: var(--fg-3);
   margin-bottom: 16px;
 }
-
-.pipeline-diagram {
+.flow {
   display: flex;
   flex-wrap: wrap;
-  gap: 0;
+  gap: 6px;
+  align-items: center;
   font-family: var(--font-mono);
   font-size: 11px;
 }
-
-.pd-step {
+.flow-step {
   display: flex;
   align-items: center;
-  gap: 0;
+  gap: 6px;
 }
-
-.pd-box {
-  background: var(--bg-2);
+.flow-box {
+  padding: 5px 11px;
+  background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 5px 10px;
-  color: var(--fg-muted);
+  border-radius: 5px;
+  color: var(--fg-2);
   white-space: nowrap;
 }
+.flow-arrow { color: var(--fg-3); }
 
-.pd-arrow {
-  color: var(--border);
-  padding: 0 4px;
-}
+/* ── Spin ── */
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin { display: inline-block; animation: spin 0.7s linear infinite; }
 
-@media (max-width: 600px) {
-  .pipeline-diagram { flex-direction: column; align-items: flex-start; }
-  .pd-arrow { transform: rotate(90deg); padding: 2px 0; }
-  .header { flex-direction: column; gap: 4px; }
+@media (max-width: 580px) {
+  .hero-title { letter-spacing: -.8px; }
+  .input-row { flex-direction: column; }
+  .flow { flex-direction: column; align-items: flex-start; }
+  .flow-arrow { transform: rotate(90deg); }
+  .topbar-right { display: none; }
 }
 </style>
 
+<div class="spotlight"></div>
 <div class="shell">
-  <!-- Header -->
-  <header class="header">
-    <div class="wordmark">forge<span>.</span></div>
-    <div class="tagline">by Anthos Intelligence</div>
-  </header>
 
-  <!-- Input -->
-  <section class="prompt-area">
-    <div class="prompt-label">enter a goal for Forge to plan and execute</div>
-    <div class="prompt-row">
-      <input
-        id="goal"
-        class="prompt-input"
-        type="text"
-        placeholder="add a searchTasks function that filters by title substring"
-        maxlength="500"
-        autocomplete="off"
-        spellcheck="false"
-      />
-      <button id="run" class="run-btn">Run</button>
+  <!-- Topbar -->
+  <nav class="topbar">
+    <div class="logo-mark">forge</div>
+    <span class="logo-by">by Anthos Intelligence</span>
+    <div class="topbar-right">
+      <a class="pill-link" href="https://github.com/TushaeBXN/anthos-engineer" target="_blank">GitHub</a>
+      <a class="pill-link" href="https://github.com/TushaeBXN/anthos-engineer/blob/main/README.md" target="_blank">Docs</a>
     </div>
-    <div class="suggestions">
-      <span class="suggestion">add a searchTasks function that filters by title substring</span>
-      <span class="suggestion">add a stats function that returns total and completed counts</span>
-      <span class="suggestion">add a priority field to tasks (low / medium / high)</span>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="hero-eyebrow">Model-agnostic engineering agent</div>
+    <h1 class="hero-title">The LLM plans.<br><span class="accent">The platform enforces.</span></h1>
+    <p class="hero-sub">
+      Forge treats the LLM as an untrusted planner — a deny-by-default policy broker, short-lived capability tokens, and a mandatory verification chain run the same way regardless of which model you use.
+    </p>
+    <div class="hero-badges">
+      <span class="badge green">deny-by-default policy</span>
+      <span class="badge green">60s capability tokens</span>
+      <span class="badge green">tsc → test → lint</span>
+      <span class="badge blue">anthropic · openai · ollama · groq</span>
     </div>
   </section>
 
-  <!-- Pipeline output -->
-  <section id="pipeline" class="pipeline" hidden></section>
+  <div class="divider"></div>
+
+  <!-- Input -->
+  <div class="input-label">give forge a goal</div>
+  <div class="input-row">
+    <input id="goal" class="goal-input" type="text"
+      placeholder="add a searchTasks function that filters by title substring"
+      maxlength="500" autocomplete="off" spellcheck="false" />
+    <button id="run" class="run-btn">Run →</button>
+  </div>
+  <div class="suggestions">
+    <span class="sug">add a searchTasks function</span>
+    <span class="sug">add a priority field (low / medium / high)</span>
+    <span class="sug">add a stats function returning total and completed</span>
+  </div>
+
+  <!-- Pipeline -->
+  <div id="pipeline" class="pipeline" hidden></div>
 
   <!-- Empty state -->
-  <div id="empty" class="empty-state">
-    <span class="glyph">//</span>
-    The LLM is the planner. The platform enforces safety.<br>
-    Type a goal above and watch Forge work through it.
+  <div id="empty" class="empty">
+    Works with <code>claude-sonnet-5-5</code>, <code>gpt-4o</code>, <code>llama3.1</code>, or any OpenAI-compatible model.<br>
+    Enter a goal above to watch the full pipeline — policy decisions, capability tokens, and verification — in real time.
   </div>
 
   <!-- How it works -->
-  <section class="how-it-works">
-    <div class="how-title">How it works</div>
-    <div class="pipeline-diagram">
-      <div class="pd-step"><div class="pd-box">System Model</div><div class="pd-arrow">→</div></div>
-      <div class="pd-step"><div class="pd-box">LLM Plan</div><div class="pd-arrow">→</div></div>
-      <div class="pd-step"><div class="pd-box">Policy Broker</div><div class="pd-arrow">→</div></div>
-      <div class="pd-step"><div class="pd-box">Capability Executor</div><div class="pd-arrow">→</div></div>
-      <div class="pd-step"><div class="pd-box">Verify Chain</div><div class="pd-arrow">→</div></div>
-      <div class="pd-step"><div class="pd-box">Semantic Diff</div></div>
+  <div class="how">
+    <div class="how-label">Pipeline</div>
+    <div class="flow">
+      <div class="flow-step"><div class="flow-box">System Model</div><span class="flow-arrow">→</span></div>
+      <div class="flow-step"><div class="flow-box">LLM Plan</div><span class="flow-arrow">→</span></div>
+      <div class="flow-step"><div class="flow-box">Policy Broker</div><span class="flow-arrow">→</span></div>
+      <div class="flow-step"><div class="flow-box">Capability Executor</div><span class="flow-arrow">→</span></div>
+      <div class="flow-step"><div class="flow-box">Verify Chain</div><span class="flow-arrow">→</span></div>
+      <div class="flow-step"><div class="flow-box">Semantic Diff</div></div>
     </div>
-  </section>
+  </div>
+
 </div>
 
 <script>
-// ── Step definitions ──────────────────────────────────────────────────────────
 const STEPS = [
-  { id: 'model',      label: 'System Model' },
-  { id: 'planning',   label: 'LLM Planning' },
-  { id: 'policy',     label: 'Policy Evaluation' },
-  { id: 'execution',  label: 'Capability Executor' },
-  { id: 'verify',     label: 'Verification Chain' },
-  { id: 'diff',       label: 'Semantic Diff' },
+  { id:'model',     label:'System Model',       num:'01' },
+  { id:'planning',  label:'LLM Planning',        num:'02' },
+  { id:'policy',    label:'Policy Evaluation',   num:'03' },
+  { id:'execution', label:'Capability Executor', num:'04' },
+  { id:'verify',    label:'Verification Chain',  num:'05' },
+  { id:'diff',      label:'Semantic Diff',       num:'06' },
 ];
+let stepEls={}, stepState={}, stepStart={}, policyRows=[], capRows=[], fileRows=[], verifyStages=[];
 
-// ── State ─────────────────────────────────────────────────────────────────────
-let stepEls = {};
-let stepState = {};
-let stepStart = {};
-let policyRows = [];
-let capRows = [];
-let fileRows = [];
-let verifyStages = [];
-let diffGroups = [];
-let blastRadius = 0;
-
-// ── DOM helpers ───────────────────────────────────────────────────────────────
-function icon(state) {
-  if (state === 'pending') return '○';
-  if (state === 'running') return '<span class="spin">◌</span>';
-  if (state === 'passed')  return '✓';
-  if (state === 'failed')  return '✗';
-  return '○';
+function ico(s){
+  if(s==='running') return `<span class="spin">◌</span>`;
+  if(s==='passed')  return '✓';
+  if(s==='failed')  return '✗';
+  return s[0].toUpperCase();
+}
+function statusText(s){
+  if(s==='running') return 'running…';
+  if(s==='passed')  return 'passed';
+  if(s==='failed')  return 'failed';
+  return '';
 }
 
-function badge(state, text) {
-  if (!text) return '';
-  return `<span class="step-badge decision-badge ${state}">${text}</span>`;
-}
-
-function elapsed(id) {
-  if (!stepStart[id]) return '';
-  return `<span class="step-duration">${Date.now() - stepStart[id]}ms</span>`;
-}
-
-// ── Build pipeline DOM ────────────────────────────────────────────────────────
-function buildPipeline() {
-  const pane = document.getElementById('pipeline');
-  pane.innerHTML = '';
-  pane.hidden = false;
-  document.getElementById('empty').hidden = true;
-  stepEls = {};
-  stepState = {};
-  policyRows = []; capRows = []; fileRows = []; verifyStages = []; diffGroups = [];
-
-  for (const s of STEPS) {
-    stepState[s.id] = 'pending';
-    const el = document.createElement('div');
-    el.className = 'step pending';
-    el.id = 'step-' + s.id;
-    el.innerHTML = `
-      <div class="step-header" onclick="toggleStep('${s.id}')">
-        <span class="step-icon">${icon('pending')}</span>
-        <span class="step-name">${s.label}</span>
+function buildPipeline(){
+  const pane=document.getElementById('pipeline');
+  pane.innerHTML=''; pane.hidden=false;
+  document.getElementById('empty').hidden=true;
+  stepEls={}; stepState={};
+  policyRows=[]; capRows=[]; fileRows=[]; verifyStages=[];
+  for(const s of STEPS){
+    stepState[s.id]='pending';
+    const el=document.createElement('div');
+    el.className='step'; el.id='step-'+s.id;
+    el.innerHTML=`
+      <div class="step-hd" onclick="tog('${s.id}')">
+        <div class="step-num" id="num-${s.id}">${s.num}</div>
+        <div class="step-name">${s.label}</div>
+        <div class="step-status" id="st-${s.id}"></div>
       </div>
-      <div class="step-body" id="body-${s.id}"></div>
-    `;
+      <div class="step-body"><div id="body-${s.id}"></div></div>`;
     pane.appendChild(el);
-    stepEls[s.id] = el;
+    stepEls[s.id]=el;
   }
 }
 
-function toggleStep(id) {
-  const el = stepEls[id];
-  if (!el) return;
+function tog(id){
+  const el=stepEls[id]; if(!el) return;
   el.classList.toggle('open');
 }
 
-function setStepState(id, state) {
-  const el = stepEls[id];
-  if (!el) return;
-  stepState[id] = state;
-  el.className = `step ${state}`;
-  const iconEl = el.querySelector('.step-icon');
-  if (iconEl) iconEl.innerHTML = icon(state);
-  if (state === 'running') {
-    stepStart[id] = Date.now();
-    el.classList.add('open');
-  }
-  if (state === 'passed' || state === 'failed') {
-    const dur = el.querySelector('.step-duration');
-    if (dur && stepStart[id]) dur.textContent = `${Date.now() - stepStart[id]}ms`;
-  }
+function setState(id,state){
+  const el=stepEls[id]; if(!el) return;
+  stepState[id]=state;
+  el.className='step '+state;
+  document.getElementById('num-'+id).innerHTML=ico(state);
+  document.getElementById('st-'+id).textContent=statusText(state);
+  if(state==='running'){ stepStart[id]=Date.now(); el.classList.add('open'); }
 }
 
-function setBody(id, html) {
-  const body = document.getElementById('body-' + id);
-  if (body) body.innerHTML = html;
+function setBody(id,html){
+  const b=document.getElementById('body-'+id); if(b) b.innerHTML=html;
 }
 
-// ── Event handlers ────────────────────────────────────────────────────────────
-function handleEvent(ev) {
-  switch (ev.type) {
-
-    case 'status':
-      break;
-
+function handleEvent(ev){
+  switch(ev.type){
     case 'model':
-      setStepState('model', 'running');
-      setBody('model', `
-        <div class="info-row">
-          <span><strong>${ev.nodes}</strong> nodes</span>
-          <span><strong>${ev.edges}</strong> edges</span>
-          <span><strong>${ev.modules}</strong> modules</span>
-          <span><strong>${ev.functions}</strong> functions</span>
-        </div>
-      `);
-      setStepState('model', 'passed');
-      break;
+      setState('model','running');
+      setBody('model',`<div class="kv-row">nodes <span>${ev.nodes}</span> · edges <span>${ev.edges}</span> · modules <span>${ev.modules}</span> · functions <span>${ev.functions}</span></div>`);
+      setState('model','passed'); break;
 
     case 'planning':
-      setStepState('planning', 'running');
-      setBody('planning', `
-        <div class="info-row">
-          <span>provider: <strong>${ev.provider}</strong></span>
-          <span>model: <strong>${ev.model}</strong></span>
-        </div>
-        <div style="font-family:var(--font-mono);font-size:12px;color:var(--fg-muted);margin-top:4px">
-          <span class="spin">◌</span> waiting for plan…
-        </div>
-      `);
+      setState('planning','running');
+      setBody('planning',`<div class="kv-row">provider <span>${ev.provider}</span> · model <span>${ev.model}</span></div><div style="font-family:var(--font-mono);font-size:12px;color:var(--fg-3)"><span class="spin">◌</span> waiting for plan…</div>`);
       break;
 
-    case 'plan': {
-      const ops = (ev.steps || []).map(s => {
-        const tag = s.op === 'create' ? 'create' : s.op === 'delete' ? 'delete' : 'modify';
-        return `<li class="op-item">
-          <span class="op-tag ${tag}">${s.op}</span>
-          <span class="op-file">${s.file}</span>
-        </li>
-        <div class="op-rationale">${s.rationale}</div>`;
-      }).join('');
-      setBody('planning', `
-        <div class="plan-rationale">${ev.rationale}</div>
-        <ul class="op-list">${ops}</ul>
-      `);
-      setStepState('planning', 'passed');
-      setStepState('policy', 'running');
-      policyRows = [];
+    case 'plan':{
+      const ops=(ev.steps||[]).map(s=>`<li class="op-row"><span class="op-badge ${s.op==='create'?'create':'modify'}">${s.op}</span><span style="color:var(--fg)">${s.file}</span></li><div style="font-family:var(--font-mono);font-size:11px;color:var(--fg-3);margin-left:56px">${s.rationale}</div>`).join('');
+      setBody('planning',`<div class="rationale">${ev.rationale}</div><ul class="item-list">${ops}</ul>`);
+      setState('planning','passed');
+      setState('policy','running');
+      policyRows=[];
       break;
     }
 
-    case 'policy': {
+    case 'policy':{
       policyRows.push(ev);
-      const rows = policyRows.map(r => `
-        <li class="policy-item">
-          <span class="decision-badge ${r.decision}">${r.decision.replace('_', ' ')}</span>
-          <span class="policy-file">${r.file}</span>
-          <span class="policy-rule">${r.rule ? `rule: ${r.rule}` : ''}</span>
-        </li>
-      `).join('');
-      setBody('policy', `<ul class="policy-list">${rows}</ul>`);
+      const cls=ev.decision==='allow'?'allow':ev.decision==='deny'?'deny':'req';
+      const label=ev.decision==='requires_approval'?'approval req':ev.decision;
+      const rows=policyRows.map(r=>`<li class="op-row"><span class="d-badge ${r.decision==='allow'?'allow':r.decision==='deny'?'deny':'req'}">${r.decision==='requires_approval'?'approval req':r.decision}</span><span style="color:var(--fg)">${r.file}</span><span style="font-family:var(--font-mono);font-size:11px;color:var(--fg-3);margin-left:auto">${r.rule||''}</span></li>`).join('');
+      setBody('policy',`<ul class="item-list">${rows}</ul>`);
       break;
     }
 
-    case 'capability': {
-      setStepState('policy', 'passed');
-      setStepState('execution', 'running');
+    case 'capability':{
+      setState('policy','passed');
+      setState('execution','running');
       capRows.push(ev);
-      const rows = capRows.map(c => `
-        <li class="cap-item">
-          <span class="cap-id">${c.id}</span>
-          <span class="cap-scope">${c.resource}:${c.operation} → ${c.targetGlob}</span>
-          <span class="cap-ttl">60s</span>
-        </li>
-      `).join('');
-      setBody('execution', `
-        <ul class="cap-list" style="margin-bottom:8px">${rows}</ul>
-        <ul class="file-list" id="file-list"></ul>
-      `);
+      const caps=capRows.map(c=>`<div class="token-row"><span class="token-id">${c.id}</span><span class="token-scope">${c.resource}:${c.operation} → ${c.targetGlob}</span><span class="token-ttl">60s</span></div>`).join('');
+      const files=fileRows.map(f=>`<div class="file-row"><span class="file-plus">+</span><span>${f.file}</span><span class="file-bytes">${f.bytes}B</span></div>`).join('');
+      setBody('execution',`${caps}<div id="flist">${files}</div>`);
       break;
     }
 
-    case 'file-written': {
+    case 'file-written':{
       fileRows.push(ev);
-      const list = document.getElementById('file-list');
-      if (list) {
-        list.innerHTML = fileRows.map(f => `
-          <li class="file-item">
-            <span class="file-icon">+</span>
-            <span class="file-path">${f.file}</span>
-            <span class="file-bytes">${f.bytes} bytes</span>
-          </li>
-        `).join('');
-      }
+      const fl=document.getElementById('flist');
+      if(fl) fl.innerHTML=fileRows.map(f=>`<div class="file-row" style="margin-top:4px"><span class="file-plus">+</span><span style="color:var(--fg)">${f.file}</span><span class="file-bytes">${f.bytes}B</span></div>`).join('');
       break;
     }
 
     case 'verify-start':
-      setStepState('execution', 'passed');
-      setStepState('verify', 'running');
-      verifyStages = [];
-      setBody('verify', `<div class="verify-stages" id="vstages"></div>`);
+      setState('execution','passed');
+      setState('verify','running');
+      verifyStages=[];
+      setBody('verify',`<div class="vstages" id="vstages"></div>`);
       break;
 
-    case 'verify-stage': {
+    case 'verify-stage':{
       verifyStages.push(ev);
-      const cont = document.getElementById('vstages');
-      if (!cont) break;
-      cont.innerHTML = verifyStages.map(s => {
-        const ico = s.skipped ? '—' : s.passed ? '<span style="color:var(--green)">✓</span>' : '<span style="color:var(--red)">✗</span>';
-        const err = (!s.passed && !s.skipped && s.output)
-          ? `<div class="vs-error">${s.output.replace(/</g,'&lt;')}</div>` : '';
-        const detail = s.skipped
-          ? `<span class="vs-skip">${s.skipReason}</span>`
-          : `<span class="vs-time">${s.durationMs}ms</span>`;
-        return `<div class="verify-stage">
-          <span class="vs-icon">${ico}</span>
-          <span class="vs-name">${s.stage}</span>
-          ${detail}
-        </div>${err}`;
+      const c=document.getElementById('vstages'); if(!c) break;
+      c.innerHTML=verifyStages.map(s=>{
+        const ico=s.skipped?'—':s.passed?`<span style="color:var(--green)">✓</span>`:`<span style="color:var(--red)">✗</span>`;
+        const err=(!s.passed&&!s.skipped&&s.output)?`<div class="vstage-err">${s.output.replace(/</g,'&lt;')}</div>`:'';
+        const detail=s.skipped?`<span class="vstage-skip">${s.skipReason}</span>`:`<span class="vstage-ms">${s.durationMs}ms</span>`;
+        return `<div><div class="vstage-row"><span class="vstage-ico">${ico}</span><span class="vstage-name">${s.stage}</span>${detail}</div>${err}</div>`;
       }).join('');
       break;
     }
 
     case 'verify-done':
-      setStepState('verify', ev.passed ? 'passed' : 'failed');
-      if (!ev.passed) setStepState('diff', 'failed');
+      setState('verify',ev.passed?'passed':'failed');
+      if(!ev.passed) setState('diff','failed');
       break;
 
-    case 'diff': {
-      diffGroups = ev.groups || [];
-      blastRadius = ev.blastRadius || 0;
-      setStepState('diff', 'running');
-
-      const groups = diffGroups.map(g => {
-        const changes = (g.changes || []).map(c => `
-          <div class="diff-change ${c.kind}">
-            <span class="diff-sign">${c.kind === 'added' ? '+' : '−'}</span>
-            <span class="diff-name">${c.name}</span>
-            <span class="diff-file">${c.file}</span>
-          </div>
-        `).join('');
-        return `<div class="diff-group">
-          <div class="diff-group-name">${g.category}</div>
-          ${changes}
-        </div>`;
-      }).join('');
-
-      setBody('diff', `
-        ${groups}
-        <div class="blast-row">Blast radius: <strong>${blastRadius}</strong> dependent node${blastRadius !== 1 ? 's' : ''}</div>
-      `);
-      setStepState('diff', 'passed');
+    case 'diff':{
+      setState('diff','running');
+      const groups=(ev.groups||[]).map(g=>`<div class="diff-grp"><div class="diff-grp-name">${g.category}</div>${(g.changes||[]).map(c=>`<div class="diff-line ${c.kind}"><span class="diff-sign">${c.kind==='added'?'+':'−'}</span><span class="diff-name">${c.name}</span><span class="diff-file">${c.file}</span></div>`).join('')}</div>`).join('');
+      setBody('diff',`${groups}<div class="blast-stat"><span class="num">${ev.blastRadius}</span><span class="lbl">blast radius node${ev.blastRadius!==1?'s':''}</span></div>`);
+      setState('diff','passed');
       break;
     }
 
-    case 'done':
-      enableInput();
-      break;
+    case 'done': enableInput(); break;
 
     case 'error':
-      console.error('Forge error:', ev.message);
-      // Mark any running step failed
-      for (const s of STEPS) {
-        if (stepState[s.id] === 'running') setStepState(s.id, 'failed');
-      }
-      // Append error to last open body
-      const errHtml = `<div style="font-family:var(--font-mono);font-size:12px;color:var(--red);margin-top:6px;padding:6px 10px;background:var(--red-dim);border-radius:4px">${ev.message}</div>`;
-      for (let i = STEPS.length - 1; i >= 0; i--) {
-        const body = document.getElementById('body-' + STEPS[i].id);
-        if (body && body.innerHTML.trim()) {
-          body.innerHTML += errHtml;
+      for(const s of STEPS) if(stepState[s.id]==='running') setState(s.id,'failed');
+      for(let i=STEPS.length-1;i>=0;i--){
+        const b=document.getElementById('body-'+STEPS[i].id);
+        if(b&&b.innerHTML.trim()){
+          b.innerHTML+=`<div style="margin-top:8px;padding:8px 12px;background:var(--red-dim);border:1px solid rgba(255,77,106,.2);border-radius:6px;font-family:var(--font-mono);font-size:12px;color:var(--red)">${ev.message}</div>`;
           break;
         }
       }
-      enableInput();
-      break;
+      enableInput(); break;
   }
 }
 
-// ── I/O ───────────────────────────────────────────────────────────────────────
-function disableInput() {
-  document.getElementById('goal').disabled = true;
-  document.getElementById('run').disabled = true;
+function disableInput(){
+  document.getElementById('goal').disabled=true;
+  document.getElementById('run').disabled=true;
+}
+function enableInput(){
+  document.getElementById('goal').disabled=false;
+  document.getElementById('run').disabled=false;
 }
 
-function enableInput() {
-  document.getElementById('goal').disabled = false;
-  document.getElementById('run').disabled = false;
-}
-
-async function runGoal(goal) {
-  if (!goal.trim()) return;
-  disableInput();
-  buildPipeline();
-
+async function runGoal(goal){
+  if(!goal.trim()) return;
+  disableInput(); buildPipeline();
   let res;
-  try {
-    res = await fetch('/api/run', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ goal }),
-    });
-  } catch (e) {
-    alert('Could not reach the server. Is it running?');
-    enableInput();
-    return;
-  }
-
-  if (!res.ok) {
-    const { error } = await res.json().catch(() => ({ error: 'Unknown error' }));
-    alert(error);
-    enableInput();
-    return;
-  }
-
-  const { sessionId } = await res.json();
-  const es = new EventSource(`/api/stream/${sessionId}`);
-  es.onmessage = (e) => {
-    const ev = JSON.parse(e.data);
-    handleEvent(ev);
-    if (ev.type === 'done' || ev.type === 'stream-end') es.close();
-  };
-  es.onerror = () => {
-    es.close();
-    enableInput();
-  };
+  try{ res=await fetch('/api/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({goal})}); }
+  catch(e){ alert('Cannot reach server'); enableInput(); return; }
+  if(!res.ok){ const {error}=await res.json().catch(()=>({error:'Unknown'})); alert(error); enableInput(); return; }
+  const {sessionId}=await res.json();
+  const es=new EventSource(`/api/stream/${sessionId}`);
+  es.onmessage=e=>{ const ev=JSON.parse(e.data); handleEvent(ev); if(ev.type==='done'||ev.type==='stream-end'||ev.type==='error') es.close(); };
+  es.onerror=()=>{ es.close(); enableInput(); };
 }
 
-// ── Wire up ───────────────────────────────────────────────────────────────────
-document.getElementById('run').addEventListener('click', () => {
-  runGoal(document.getElementById('goal').value);
-});
-
-document.getElementById('goal').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') runGoal(e.target.value);
-});
-
-document.querySelectorAll('.suggestion').forEach(el => {
-  el.addEventListener('click', () => {
-    document.getElementById('goal').value = el.textContent.trim();
-  });
-});
+document.getElementById('run').addEventListener('click',()=>runGoal(document.getElementById('goal').value));
+document.getElementById('goal').addEventListener('keydown',e=>{ if(e.key==='Enter') runGoal(e.target.value); });
+document.querySelectorAll('.sug').forEach(el=>el.addEventListener('click',()=>{ document.getElementById('goal').value=el.textContent.trim(); }));
 </script>
