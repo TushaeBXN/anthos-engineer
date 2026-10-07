@@ -1,0 +1,9 @@
+{
+  "name": "forge-demo-app",
+  "version": "1.0.0",
+  "description": "Forge demo — task management API",
+  "type": "module",
+  "scripts": {
+    "test": "node --import tsx/esm --test tests/**/*.test.ts"
+  }
+}

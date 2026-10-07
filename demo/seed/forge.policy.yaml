@@ -1,0 +1,36 @@
+version: 1
+default: deny
+
+rules:
+  # Demo: agents may write to src/ and tests/
+  - id: allow-src-writes
+    resource: filesystem
+    operation: write
+    target: "src/**"
+    effect: allow
+
+  - id: allow-tests-writes
+    resource: filesystem
+    operation: write
+    target: "tests/**"
+    effect: allow
+
+  # Allow all reads
+  - id: allow-all-reads
+    resource: filesystem
+    operation: read
+    target: "**"
+    effect: allow
+
+  # Allow verification tools
+  - id: allow-test-runner
+    resource: shell
+    operation: npm test
+    target: "*"
+    effect: allow
+
+  - id: allow-tsc
+    resource: shell
+    operation: npx tsc
+    target: "*"
+    effect: allow
