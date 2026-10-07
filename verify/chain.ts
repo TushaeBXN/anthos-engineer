@@ -6,6 +6,7 @@
  */
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -26,7 +27,14 @@ export interface StageResult {
 export interface ChainResult {
   passed: boolean; // true only when every non-skipped stage passed
   stages: StageResult[];
+  /** SHA-256 of `git diff HEAD` at the moment verification completed.
+   *  The git executor compares this against the working tree before committing
+   *  to detect changes made after verification passed. */
+  diffHash: string;
 }
+
+/** Returned by runVerificationChain; passed into executor/git.ts commit(). */
+export type VerifyGate = Pick<ChainResult, "passed" | "diffHash">;
 
 async function runStage(
   stage: StageName,
@@ -105,10 +113,19 @@ export async function runVerificationChain(cwd = process.cwd()): Promise<ChainRe
     stages.push(skip("lint", "No ESLint config found"));
   }
 
-  return {
-    passed: stages.filter((s) => !s.skipped).every((s) => s.passed),
-    stages,
-  };
+  const passed = stages.filter((s) => !s.skipped).every((s) => s.passed);
+
+  // Record the diff state at the moment verification completes so commits
+  // can reject a stale gate (something changed after verification passed).
+  let hash = "";
+  try {
+    const { stdout } = await execFileAsync("git", ["diff", "HEAD"], { cwd, timeout: 15_000 });
+    hash = createHash("sha256").update(stdout).digest("hex");
+  } catch {
+    // Not in a git repo or git not available — gate still works, hash is empty.
+  }
+
+  return { passed, stages, diffHash: hash };
 }
 
 // Pretty-print a ChainResult to stdout

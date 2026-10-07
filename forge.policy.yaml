@@ -51,16 +51,58 @@ rules:
     target: "*"
     effect: allow
 
-  # Requires approval: git push (resolved from both git.push and shell: "git push")
+  # Hard deny: force-push is never allowed, regardless of branch
+  - id: deny-git-force-push
+    resource: git
+    operation: force-push
+    target: "**"
+    effect: deny
+
+  # Hard deny: never push to main or master directly
+  - id: deny-push-main
+    resource: git
+    operation: push
+    target: "main"
+    effect: deny
+
+  - id: deny-push-master
+    resource: git
+    operation: push
+    target: "master"
+    effect: deny
+
+  # Requires approval: git push to a forge/* branch
   - id: require-approval-git-push
     resource: git
     operation: push
+    target: "forge/**"
+    effect: allow
+    requires_approval: true
+
+  # Requires approval: commit (staging + committing implies a visible change)
+  - id: require-approval-git-commit
+    resource: git
+    operation: commit
     target: "**"
     effect: allow
     requires_approval: true
 
-  # Allow: other git read operations
-  - id: allow-git-reads
+  # Allow: stage specific files (agent must name the paths — no git add -A)
+  - id: allow-git-add
+    resource: git
+    operation: add
+    target: "**"
+    effect: allow
+
+  # Allow: create a forge/* branch
+  - id: allow-git-branch
+    resource: git
+    operation: branch
+    target: "forge/**"
+    effect: allow
+
+  # Allow: git read operations
+  - id: allow-git-status
     resource: git
     operation: status
     target: "**"
@@ -69,5 +111,17 @@ rules:
   - id: allow-git-log
     resource: git
     operation: log
+    target: "**"
+    effect: allow
+
+  - id: allow-git-diff
+    resource: git
+    operation: diff
+    target: "**"
+    effect: allow
+
+  - id: allow-git-rev-parse
+    resource: git
+    operation: rev-parse
     target: "**"
     effect: allow
