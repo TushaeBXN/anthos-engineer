@@ -6,7 +6,8 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsx cli/index.ts",
-    "test": "node --import tsx/esm --test tests/**/*.test.ts"
+    "test": "node --import tsx/esm --test tests/**/*.test.ts",
+    "demo": "node --import tsx/esm demo/server.ts"
   },
   "bin": {
     "forge": "./dist/cli/index.js"
