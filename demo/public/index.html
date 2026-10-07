@@ -336,6 +336,65 @@ body {
   border-left: 2px solid var(--border-lit);
 }
 
+/* ── Git diff viewer ── */
+.diff-viewer {
+  margin-top: 14px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+.diff-viewer-label {
+  font-family: var(--font-mono); font-size: 10px; font-weight: 700;
+  letter-spacing: .09em; text-transform: uppercase;
+  color: var(--fg-3); margin-bottom: 8px;
+  display: flex; align-items: center; gap: 8px;
+}
+.diff-viewer-label::after {
+  content: ''; flex: 1; height: 1px; background: var(--border);
+}
+.diff-file-block {
+  border: 1px solid var(--border); border-radius: 7px;
+  overflow: hidden; margin-bottom: 6px;
+}
+.diff-file-hd {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 12px; background: var(--bg-hover);
+  cursor: pointer; user-select: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color .15s;
+}
+.diff-file-block.open .diff-file-hd { border-color: var(--border); }
+.diff-file-icon { font-size: 10px; color: var(--fg-3); }
+.diff-file-name { font-family: var(--font-mono); font-size: 12px; color: var(--fg); flex: 1; }
+.diff-file-stats { font-family: var(--font-mono); font-size: 11px; display: flex; gap: 6px; }
+.diff-stat-add { color: var(--green); }
+.diff-stat-del { color: var(--red); }
+.diff-file-chevron { font-size: 9px; color: var(--fg-3); }
+.diff-file-body { display: none; overflow-x: auto; }
+.diff-file-block.open .diff-file-body { display: block; }
+.diff-hunk-hd {
+  padding: 3px 14px;
+  background: rgba(77,166,255,.04);
+  border-top: 1px solid var(--border);
+  font-family: var(--font-mono); font-size: 10px; color: var(--fg-3);
+}
+.diff-line {
+  display: flex; font-family: var(--font-mono); font-size: 11px;
+  line-height: 1.65; min-width: max-content;
+}
+.diff-line.add { background: rgba(0,229,160,.06); }
+.diff-line.del { background: rgba(255,77,106,.06); }
+.diff-line .dl-sign {
+  width: 18px; text-align: center; flex-shrink: 0;
+  color: var(--fg-3); padding: 0 2px;
+}
+.diff-line.add .dl-sign { color: var(--green); }
+.diff-line.del .dl-sign { color: var(--red); }
+.diff-line .dl-code {
+  padding: 0 14px 0 4px; color: var(--fg-3); white-space: pre;
+}
+.diff-line.add .dl-code { color: var(--fg); }
+.diff-line.del .dl-code { color: var(--fg-2); }
+
 /* ── Debug log panel ── */
 .debug-wrap {
   margin-top: 12px; border: 1px solid var(--border); border-radius: 8px;
@@ -542,6 +601,74 @@ body {
 </div>
 
 <script>
+// ── Diff parser + renderer ───────────────────────────────────────────────────
+function parseDiff(raw) {
+  const files = [];
+  let file = null, hunk = null;
+  for (const line of raw.split('\n')) {
+    if (line.startsWith('diff --git ')) {
+      if (file) files.push(file);
+      file = { name: '', hunks: [], adds: 0, dels: 0 };
+      hunk = null;
+    } else if (line.startsWith('+++ b/') && file) {
+      file.name = line.slice(6);
+    } else if (line.startsWith('@@ ') && file) {
+      hunk = { header: line.match(/@@[^@]+@@/)?.[0] ?? line, lines: [] };
+      file.hunks.push(hunk);
+    } else if (hunk) {
+      if (line.startsWith('+') && !line.startsWith('+++')) {
+        hunk.lines.push({ type: 'add', text: line.slice(1) });
+        if (file) file.adds++;
+      } else if (line.startsWith('-') && !line.startsWith('---')) {
+        hunk.lines.push({ type: 'del', text: line.slice(1) });
+        if (file) file.dels++;
+      } else if (!line.startsWith('\\') && !line.startsWith('diff') && !line.startsWith('index') && !line.startsWith('---') && !line.startsWith('+++')) {
+        hunk.lines.push({ type: 'ctx', text: line.slice(1) });
+      }
+    }
+  }
+  if (file) files.push(file);
+  return files.filter(f => f.name);
+}
+
+function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function renderDiffViewer(files) {
+  if (!files.length) return '';
+  const blocks = files.map((f, i) => {
+    const adds = f.adds ? `<span class="diff-stat-add">+${f.adds}</span>` : '';
+    const dels = f.dels ? `<span class="diff-stat-del">−${f.dels}</span>` : '';
+    const hunks = f.hunks.map(h => {
+      const lines = h.lines.map(l =>
+        `<div class="diff-line ${l.type}"><span class="dl-sign">${l.type==='add'?'+':l.type==='del'?'−':' '}</span><span class="dl-code">${esc(l.text)}</span></div>`
+      ).join('');
+      return `<div class="diff-hunk-hd">${esc(h.header)}</div>${lines}`;
+    }).join('');
+    const isFirst = i === 0;
+    return `<div class="diff-file-block${isFirst?' open':''}" id="dff-${i}">
+      <div class="diff-file-hd" onclick="toggleDiffFile(${i})">
+        <span class="diff-file-icon">📄</span>
+        <span class="diff-file-name">${esc(f.name)}</span>
+        <span class="diff-file-stats">${adds}${dels}</span>
+        <span class="diff-file-chevron" id="dfc-${i}">${isFirst?'▲':'▼'}</span>
+      </div>
+      <div class="diff-file-body">${hunks}</div>
+    </div>`;
+  }).join('');
+  return `<div class="diff-viewer">
+    <div class="diff-viewer-label">Changes</div>
+    ${blocks}
+  </div>`;
+}
+
+function toggleDiffFile(i) {
+  const block = document.getElementById('dff-' + i);
+  const chev  = document.getElementById('dfc-' + i);
+  if (!block) return;
+  block.classList.toggle('open');
+  if (chev) chev.textContent = block.classList.contains('open') ? '▲' : '▼';
+}
+
 // ── Provider defaults ────────────────────────────────────────────────────────
 const PROV_DEFAULTS = {
   anthropic: 'claude-sonnet-5-5',
@@ -791,6 +918,19 @@ function handleEvent(ev){
       fileRows.push(ev);
       const fl=document.getElementById('flist');
       if(fl) fl.innerHTML=fileRows.map(f=>`<div class="file-row" style="margin-top:4px"><span class="file-plus">+</span><span style="color:var(--fg)">${f.file}</span><span class="file-bytes">${f.bytes}B</span></div>`).join('');
+      break;
+    }
+
+    case 'git-diff':{
+      if (!ev.diff || !ev.diff.trim()) break;
+      const parsedFiles = parseDiff(ev.diff);
+      if (!parsedFiles.length) break;
+      const body = document.getElementById('body-execution');
+      if (body) {
+        const old = body.querySelector('.diff-viewer');
+        if (old) old.remove();
+        body.insertAdjacentHTML('beforeend', renderDiffViewer(parsedFiles));
+      }
       break;
     }
 
