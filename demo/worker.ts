@@ -5,6 +5,7 @@
  * so the server can distinguish them from other Node.js output.
  */
 import { glob } from "glob";
+import { execSync } from "node:child_process";
 import { resetDb, getLatestEventId, getEventsSince } from "../model/events.js";
 import { resetGraph, getGraph } from "../model/graph.js";
 import { initFromFiles, localInvalidation, rebuildGraph } from "../model/incremental.js";
@@ -132,6 +133,12 @@ async function run(): Promise<void> {
     }
     changeEvents.push(...getEventsSince(beforeId));
   }
+
+  // ── 4b. Capture git diff for UI ──────────────────────────────────────────
+  try {
+    const rawDiff = execSync("git diff HEAD", { cwd: sandboxDir, encoding: "utf-8" });
+    if (rawDiff.trim()) emit({ type: "git-diff", diff: rawDiff });
+  } catch { /* not in a git repo or no changes — non-fatal */ }
 
   // ── 5. Verification chain ─────────────────────────────────────────────────
   emit({ type: "verify-start" });
