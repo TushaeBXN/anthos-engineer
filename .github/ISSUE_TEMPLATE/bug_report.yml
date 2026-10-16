@@ -1,0 +1,121 @@
+name: Bug Report
+description: Report a reproducible bug in Forge.
+labels: ["bug"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Before submitting:** search [open issues](https://github.com/TushaeBXN/anthos-engineer/issues) first.
+        Duplicate reports slow things down.
+
+        For security vulnerabilities, **do not open a public issue** —
+        use [GitHub Security Advisories](https://github.com/TushaeBXN/anthos-engineer/security/advisories/new)
+        and read [SECURITY.md](https://github.com/TushaeBXN/anthos-engineer/blob/main/SECURITY.md) first.
+
+  - type: checkboxes
+    id: prerequisites
+    attributes:
+      label: Prerequisites
+      options:
+        - label: I searched [open issues](https://github.com/TushaeBXN/anthos-engineer/issues?q=is%3Aissue+is%3Aopen) and did not find an existing report of this bug.
+          required: true
+        - label: This is **not** a security vulnerability. (Use [GitHub Security Advisories](https://github.com/TushaeBXN/anthos-engineer/security/advisories/new) for those.)
+          required: true
+        - label: I am running the latest code from `main` and the bug still reproduces there.
+          required: true
+
+  - type: input
+    id: revision
+    attributes:
+      label: Forge Version
+      description: |
+        From the repository root run:
+        `git show -s --abbrev=12 --format='%h (%cs)' HEAD`
+        and paste the output exactly.
+      placeholder: "a1b2c3d4e5f6 (2026-10-01)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: provider
+    attributes:
+      label: LLM Provider
+      description: Which provider were you using with FORGE_PROVIDER?
+      options:
+        - "-- Please Select --"
+        - anthropic (default)
+        - openai
+        - ollama
+        - groq
+        - together
+        - lmstudio
+        - Other OpenAI-compatible
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      options:
+        - "-- Please Select --"
+        - Linux
+        - macOS
+        - Windows
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Exact steps that reliably trigger the bug.
+      placeholder: |
+        1. Run `forge init`
+        2. Run `forge change "..."`
+        3. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behaviour
+      description: What should have happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behaviour
+      description: What actually happened? Include the full error message and stack trace if present.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / Output
+      description: Paste relevant terminal output. Remove API keys and personal data before pasting.
+      render: text
+
+  - type: dropdown
+    id: willing_to_fix
+    attributes:
+      label: Are you willing to submit a fix?
+      options:
+        - "-- Please Select --"
+        - "Yes — I can open a PR"
+        - "Partially — I can help but need guidance"
+        - "No — I am only filing the report"
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional-info
+    attributes:
+      label: Additional Information
+      description: Anything else that might help — related issues, things you already tried, or environment quirks.
