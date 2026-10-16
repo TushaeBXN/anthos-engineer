@@ -1,0 +1,7 @@
+# Gitleaks configuration: the built-in default rules.
+#
+# Add project-specific allowlists below if a rule fires on a known-safe value
+# in a specific file (e.g. a test fixture or provenance document).
+
+[extend]
+useDefault = true
