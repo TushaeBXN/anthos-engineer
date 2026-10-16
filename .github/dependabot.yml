@@ -1,0 +1,26 @@
+# Dependabot keeps dependencies and pinned action versions current.
+#
+# Updates are grouped so a week's bumps arrive as one PR per ecosystem,
+# not a flood of separate ones.
+
+version: 2
+updates:
+  # npm dependencies (package.json / package-lock.json).
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      npm:
+        patterns: ["*"]
+
+  # The pinned action SHAs used across .github/workflows.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      actions:
+        patterns: ["*"]
