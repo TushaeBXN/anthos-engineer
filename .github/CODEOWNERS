@@ -1,0 +1,5 @@
+# Code owners.
+#
+# Intentionally empty for now. A per-area ownership map is planned once
+# the contributor base grows. Until then, required reviews remain in force
+# via branch protection.
