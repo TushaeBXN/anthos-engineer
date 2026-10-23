@@ -221,8 +221,11 @@ const server = createServer((req, res) => {
 
   const ext = path.extname(filePath);
   const contentType: Record<string, string> = {
-    ".html": "text/html", ".js": "text/javascript", ".css": "text/css",
-    ".json": "application/json", ".ico": "image/x-icon",
+    ".html": "text/html; charset=utf-8",
+    ".js": "text/javascript; charset=utf-8",
+    ".css": "text/css; charset=utf-8",
+    ".json": "application/json; charset=utf-8",
+    ".ico": "image/x-icon",
   };
   res.writeHead(200, { "Content-Type": contentType[ext] ?? "text/plain" });
   fs.createReadStream(filePath).pipe(res);
