@@ -10,7 +10,9 @@ import { loadPolicy } from "../policy/parser.js";
 import { evaluate } from "../policy/evaluator.js";
 import { issueCapability } from "../capability/issuer.js";
 import { writeFile } from "../executor/filesystem.js";
+import { createBranch, commit, push } from "../executor/git.js";
 import { runVerificationChain, printChainResult } from "../verify/chain.js";
+import type { VerifyGate } from "../verify/chain.js";
 import { computeSemanticDiff, printSemanticDiff } from "../diff/semantic.js";
 import { planChange } from "../llm/planner.js";
 import type { ActionRequest } from "../policy/schema.js";
@@ -270,6 +272,49 @@ async function cmdChange(goal: string): Promise<void> {
 
   if (!chainResult.passed) {
     process.exit(1);
+  }
+
+  // 10. Git: create forge/* branch → commit → optional push
+  const slug = goal
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48);
+
+  const cwd = process.cwd();
+  const branchResult = await createBranch(slug, agentId, sessionId, cwd);
+  if (!branchResult.success) {
+    console.log(`\nNote: skipping git commit — ${branchResult.error ?? branchResult.stderr}`);
+    return;
+  }
+  console.log(`\nBranch:  ${branchResult.stdout}`);
+
+  const changedPaths = evaluated
+    .filter((e) => e.decision.decision !== "deny")
+    .map((e) => e.op.filePath);
+
+  const gate: VerifyGate = { passed: chainResult.passed, diffHash: chainResult.diffHash };
+  const commitResult = await commit(`feat: ${goal}`, changedPaths, gate, agentId, sessionId, cwd);
+
+  if (!commitResult.success) {
+    console.log(`Commit failed: ${commitResult.stderr}`);
+    return;
+  }
+  console.log(`Commit:  ${commitResult.stdout}`);
+
+  const rl2 = readline.createInterface({ input: process.stdin, output: process.stdout });
+  const pushAnswer = await rl2.question("\nPush to GitHub? [y/N] ");
+  rl2.close();
+
+  if (pushAnswer.trim().toLowerCase() === "y") {
+    const pushResult = await push(true, agentId, sessionId, cwd);
+    if (pushResult.success) {
+      console.log(`Pushed:  ${pushResult.stdout}\n`);
+    } else {
+      console.error(`Push failed: ${pushResult.stderr}\n`);
+    }
+  } else {
+    console.log(`\nBranch ready — run 'git push -u origin ${branchResult.stdout}' when ready.\n`);
   }
 }
 
