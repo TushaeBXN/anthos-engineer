@@ -40,10 +40,12 @@ async function initRepo(dir: string): Promise<void> {
 
 async function passingGate(cwd: string): Promise<VerifyGate> {
   const { createHash } = await import("node:crypto");
-  const { stdout } = await execFileAsync("git", ["diff", "HEAD"], { cwd });
+  const { stdout: diff } = await execFileAsync("git", ["diff", "HEAD"], { cwd });
+  const { stdout: status } = await execFileAsync("git", ["status", "--porcelain"], { cwd });
+  // Trim to match executor/git.ts diffHash(), which uses the git() helper that trims stdout.
   return {
     passed: true,
-    diffHash: createHash("sha256").update(stdout).digest("hex"),
+    diffHash: createHash("sha256").update(diff.trim() + "\n" + status.trim()).digest("hex"),
   };
 }
 
@@ -118,6 +120,9 @@ before(async () => {
       "utf8",
     );
   }
+  // Commit the policy file so it's tracked and doesn't pollute gitStatus tests.
+  await execFileAsync("git", ["add", "forge.policy.yaml"], { cwd: tmpDir });
+  await execFileAsync("git", ["commit", "-m", "add policy"], { cwd: tmpDir });
   process.chdir(tmpDir);
 });
 

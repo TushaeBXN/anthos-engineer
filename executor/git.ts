@@ -122,7 +122,8 @@ export async function currentBranch(cwd: string): Promise<string> {
 
 export async function diffHash(cwd: string): Promise<string> {
   const diff = await git(["diff", "HEAD"], cwd);
-  return createHash("sha256").update(diff).digest("hex");
+  const status = await git(["status", "--porcelain"], cwd);
+  return createHash("sha256").update(diff + "\n" + status).digest("hex");
 }
 
 export async function gitStatus(
@@ -235,7 +236,16 @@ export async function commit(
   if (!stageResult.success) return stageResult;
 
   try {
-    const capId = brokerAndIssue("commit", branch, agentId, sessionId);
+    // Inline the broker — VerifyGate IS the approval proof for commits,
+    // so requires_approval is treated as "proceed with audit" (same pattern as push).
+    const policy = loadPolicy();
+    const req = buildRequest("commit", branch, agentId, sessionId);
+    const record = evaluate(req, policy);
+    recordDecision(record);
+    if (record.decision === "deny") {
+      throw new Error(`Policy denied git commit: ${record.reason}`);
+    }
+    const capId = issueCapability(record).id;
     revalidate(capId, "commit");
     const truncatedMsg = message.slice(0, 500);
     await git(["commit", "-m", truncatedMsg], cwd);

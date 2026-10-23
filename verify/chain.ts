@@ -117,10 +117,12 @@ export async function runVerificationChain(cwd = process.cwd()): Promise<ChainRe
 
   // Record the diff state at the moment verification completes so commits
   // can reject a stale gate (something changed after verification passed).
+  // Include git status --porcelain so untracked files are also detected.
   let hash = "";
   try {
-    const { stdout } = await execFileAsync("git", ["diff", "HEAD"], { cwd, timeout: 15_000 });
-    hash = createHash("sha256").update(stdout).digest("hex");
+    const { stdout: diff } = await execFileAsync("git", ["diff", "HEAD"], { cwd, timeout: 15_000 });
+    const { stdout: status } = await execFileAsync("git", ["status", "--porcelain"], { cwd, timeout: 15_000 });
+    hash = createHash("sha256").update(diff.trim() + "\n" + status.trim()).digest("hex");
   } catch {
     // Not in a git repo or git not available — gate still works, hash is empty.
   }
