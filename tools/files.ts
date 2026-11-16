@@ -1,6 +1,7 @@
 /** read, write and edit — how the agent sees and changes files. */
 import fs from "node:fs/promises";
 import path from "node:path";
+import type { UndoStack } from "../agent/undo.js";
 import type { Tool } from "../agent/types.js";
 
 const MAX_READ_LINES = 2000;
@@ -34,79 +35,89 @@ export const read: Tool = {
   },
 };
 
-export const write: Tool = {
-  name: "write",
-  description:
-    "Create a file, or replace a whole file, with the given content. " +
-    "To change part of an existing file, use edit instead.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      path: { type: "string", description: "File path, relative to the project root" },
-      content: { type: "string", description: "The complete file content" },
+/** Call this to get write/edit tools wired up to an undo stack. */
+export function makeWriteTools(undo?: UndoStack): { write: Tool; edit: Tool } {
+  const write: Tool = {
+    name: "write",
+    description:
+      "Create a file, or replace a whole file, with the given content. " +
+      "To change part of an existing file, use edit instead.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "File path, relative to the project root" },
+        content: { type: "string", description: "The complete file content" },
+      },
+      required: ["path", "content"],
     },
-    required: ["path", "content"],
-  },
-  access: (input) => ({ kind: "write", path: String(input.path) }),
-  label: (input) => `Write ${input.path}`,
-  async run(input, cwd) {
-    const file = path.resolve(cwd, String(input.path));
-    const content = String(input.content);
-    const before = await fs.readFile(file, "utf8").catch(() => null);
-    await fs.mkdir(path.dirname(file), { recursive: true });
-    await fs.writeFile(file, content, "utf8");
-    return {
-      output: `${before === null ? "Created" : "Replaced"} ${input.path}`,
-      lines: { file: String(input.path), ...countChangedLines(before ?? "", content) },
-    };
-  },
-};
-
-export const edit: Tool = {
-  name: "edit",
-  description:
-    "Replace an exact piece of text in a file. old_string must match the file exactly, " +
-    "including indentation, and must appear only once unless replace_all is true.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      path: { type: "string", description: "File path, relative to the project root" },
-      old_string: { type: "string", description: "The exact text to replace" },
-      new_string: { type: "string", description: "The text to put in its place" },
-      replace_all: { type: "boolean", description: "Replace every occurrence (default false)" },
-    },
-    required: ["path", "old_string", "new_string"],
-  },
-  access: (input) => ({ kind: "write", path: String(input.path) }),
-  label: (input) => `Edit ${input.path}`,
-  async run(input, cwd) {
-    const file = path.resolve(cwd, String(input.path));
-    const oldText = String(input.old_string);
-    const newText = String(input.new_string);
-    const before = await fs.readFile(file, "utf8");
-
-    const found = before.split(oldText).length - 1;
-    if (oldText === "" || found === 0) {
-      return { output: `old_string was not found in ${input.path}. Read the file and copy the text exactly.`, isError: true };
-    }
-    if (found > 1 && input.replace_all !== true) {
+    access: (input) => ({ kind: "write", path: String(input.path) }),
+    label: (input) => `Write ${input.path}`,
+    async run(input, cwd) {
+      const file = path.resolve(cwd, String(input.path));
+      const content = String(input.content);
+      const before = await fs.readFile(file, "utf8").catch(() => null);
+      undo?.push({ path: String(input.path), abs: file, before, at: new Date() });
+      await fs.mkdir(path.dirname(file), { recursive: true });
+      await fs.writeFile(file, content, "utf8");
       return {
-        output: `old_string appears ${found} times in ${input.path}. Add surrounding lines to make it unique, or set replace_all.`,
-        isError: true,
+        output: `${before === null ? "Created" : "Replaced"} ${input.path}`,
+        lines: { file: String(input.path), ...countChangedLines(before ?? "", content) },
       };
-    }
+    },
+  };
 
-    // split/join rather than replace(): "$" in new_string must stay literal.
-    const after = input.replace_all === true
-      ? before.split(oldText).join(newText)
-      : before.replace(oldText, () => newText);
-    await fs.writeFile(file, after, "utf8");
-    return {
-      output: `Edited ${input.path} (${found} replacement${found === 1 ? "" : "s"})`,
-      lines: { file: String(input.path), ...countChangedLines(before, after) },
-    };
-  },
-};
+  const edit: Tool = {
+    name: "edit",
+    description:
+      "Replace an exact piece of text in a file. old_string must match the file exactly, " +
+      "including indentation, and must appear only once unless replace_all is true.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "File path, relative to the project root" },
+        old_string: { type: "string", description: "The exact text to replace" },
+        new_string: { type: "string", description: "The text to put in its place" },
+        replace_all: { type: "boolean", description: "Replace every occurrence (default false)" },
+      },
+      required: ["path", "old_string", "new_string"],
+    },
+    access: (input) => ({ kind: "write", path: String(input.path) }),
+    label: (input) => `Edit ${input.path}`,
+    async run(input, cwd) {
+      const file = path.resolve(cwd, String(input.path));
+      const oldText = String(input.old_string);
+      const newText = String(input.new_string);
+      const before = await fs.readFile(file, "utf8");
+      undo?.push({ path: String(input.path), abs: file, before, at: new Date() });
+
+      const found = before.split(oldText).length - 1;
+      if (oldText === "" || found === 0) {
+        return { output: `old_string was not found in ${input.path}. Read the file and copy the text exactly.`, isError: true };
+      }
+      if (found > 1 && input.replace_all !== true) {
+        return {
+          output: `old_string appears ${found} times in ${input.path}. Add surrounding lines to make it unique, or set replace_all.`,
+          isError: true,
+        };
+      }
+
+      // split/join rather than replace(): "$" in new_string must stay literal.
+      const after = input.replace_all === true
+        ? before.split(oldText).join(newText)
+        : before.replace(oldText, () => newText);
+      await fs.writeFile(file, after, "utf8");
+      return {
+        output: `Edited ${input.path} (${found} replacement${found === 1 ? "" : "s"})`,
+        lines: { file: String(input.path), ...countChangedLines(before, after) },
+      };
+    },
+  };
+
+  return { write, edit };
+}
+
+/** Default tools without an undo stack (used by tests and the demo). */
+export const { write, edit } = makeWriteTools();
 
 /**
  * Lines added and removed between two versions of a file. Each line of the old

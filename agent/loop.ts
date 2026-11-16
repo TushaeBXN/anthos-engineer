@@ -60,19 +60,42 @@ export async function runTurn(message: string, agent: Agent): Promise<string> {
     }
 
     // Every tool call gets an answer, or the next request is invalid.
-    const results: ToolResult[] = [];
-    for (const call of reply.toolCalls) {
-      results.push(
-        reply.stopped === "cut_off"
-          ? failed(call, "Not run: your reply was cut off at the output limit. Use smaller steps, and edit instead of rewriting whole files.")
-          : await runTool(call, agent),
+    // Reads and shell calls run in parallel; writes serialize to avoid conflicts.
+    if (reply.stopped === "cut_off") {
+      input = reply.toolCalls.map((call) =>
+        failed(call, "Not run: your reply was cut off at the output limit. Use smaller steps, and edit instead of rewriting whole files."),
       );
+    } else {
+      input = await runToolsParallel(reply.toolCalls, agent);
     }
-    input = results;
   }
 
   agent.screen.note("Stopped: too many steps in one turn.");
   return "";
+}
+
+/**
+ * Run tool calls with smart parallelism: reads and shell calls run concurrently;
+ * writes serialize so two agents don't clobber the same file.
+ */
+async function runToolsParallel(calls: ToolCall[], agent: Agent): Promise<ToolResult[]> {
+  if (calls.length === 1) return [await runTool(calls[0]!, agent)];
+
+  // Split into waves: reads/shell first (parallel), then writes (sequential).
+  const reads: { idx: number; call: ToolCall }[] = [];
+  const writes: { idx: number; call: ToolCall }[] = [];
+  for (let i = 0; i < calls.length; i++) {
+    const call = calls[i]!;
+    const tool = agent.tools.find((t) => t.name === call.name);
+    const access = tool ? tool.access(call.input) : { kind: "none" as const };
+    if (access.kind === "write") writes.push({ idx: i, call });
+    else reads.push({ idx: i, call });
+  }
+
+  const results: ToolResult[] = new Array(calls.length);
+  await Promise.all(reads.map(async ({ idx, call }) => { results[idx] = await runTool(call, agent); }));
+  for (const { idx, call } of writes) results[idx] = await runTool(call, agent);
+  return results;
 }
 
 /** Check one tool call against the policy, run it if allowed, and report what happened. */

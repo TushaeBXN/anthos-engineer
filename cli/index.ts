@@ -11,6 +11,7 @@ import { glob } from "glob";
 import { runTurn } from "../agent/loop.js";
 import { createAgent } from "../agent/start.js";
 import { printStatus, prompt } from "../agent/ui.js";
+import { runCommand, type CommandContext } from "./commands.js";
 
 const HELP = `
   forge                 Start a conversation
@@ -31,15 +32,35 @@ async function once(request: string): Promise<void> {
 
 /** A conversation: read a line, run a turn, show the status line, repeat. */
 async function chat(): Promise<void> {
-  const agent = createAgent();
-  console.log("\n  Forge\n");
+  let agent = createAgent();
+  let lastText = "";
+
+  const ctx: CommandContext = {
+    get agent() { return agent; },
+    reset() { agent = createAgent(); lastText = ""; },
+    lastText() { return lastText; },
+  };
+
+  console.log("\n  Forge  (type /help for commands)\n");
   printStatus(agent.usage);
 
   while (true) {
     const line = await prompt();
     if (line === null || line.trim() === "exit" || line.trim() === "quit") break;
     if (line.trim() === "") continue;
-    await runTurn(line, agent);
+
+    const { handled, result } = await runCommand(line, ctx);
+    if (handled) {
+      if (result?.exit) break;
+      if (result?.refreshStatus) printStatus(agent.usage);
+      if (!result?.inject) continue;
+      // /compact injects a summary as the next user message.
+      lastText = await runTurn(result.inject, agent);
+      printStatus(agent.usage);
+      continue;
+    }
+
+    lastText = await runTurn(line, agent);
     printStatus(agent.usage);
   }
 }

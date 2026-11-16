@@ -5,7 +5,8 @@ import path from "node:path";
 import { recordDecision } from "../policy/audit.js";
 import type { Access } from "../policy/check.js";
 import { loadPolicy } from "../policy/parser.js";
-import { tools } from "../tools/index.js";
+import { makeTools } from "../tools/index.js";
+import { UndoStack } from "./undo.js";
 import type { Agent } from "./loop.js";
 import { resolveModel, type ModelInfo } from "./models.js";
 import { anthropicSession } from "./providers/anthropic.js";
@@ -26,14 +27,21 @@ How to work:
 /** Files that hold a project's own instructions for agents. The first one found is used. */
 const INSTRUCTION_FILES = ["FORGE.md", "AGENTS.md", "CLAUDE.md"];
 
-export function createAgent(cwd = process.cwd()): Agent {
+export interface CreatedAgent extends Agent {
+  undo: UndoStack;
+}
+
+export function createAgent(cwd = process.cwd()): CreatedAgent {
   const model = resolveModel();
   const budget = Number(process.env["FORGE_BUDGET_USD"]);
   const alwaysAllowed = new Set<string>();
+  const undo = new UndoStack();
+  const tools = makeTools(undo);
 
   return {
     session: createSession(model, systemPrompt(cwd), tools),
     tools,
+    undo,
     policy: loadPolicy(path.join(cwd, "forge.policy.yaml")),
     usage: new UsageTracker(model, budget > 0 ? budget : null),
     screen: terminal,
