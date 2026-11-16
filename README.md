@@ -33,10 +33,36 @@ agent/usage.ts     the status line
 
 ## Quick start
 
-Requires Node.js 22 or later.
+Requires Node.js 22 or later and [Ollama](https://ollama.com) or an API key.
+
+### Local model (free, no API key)
 
 ```bash
+# 1. Pull the model once (~4.7 GB)
+ollama pull hf.co/Melvin56/Qwen2.5-Coder-7B-Instruct-abliterated-Q4_K_M-GGUF:Q4_K_M
+
+# 2. Clone and install
+git clone https://github.com/TushaeBXN/anthos-engineer.git
+cd anthos-engineer
 npm install
+npm install-scripts approve better-sqlite3 esbuild fsevents
+npm rebuild better-sqlite3
+
+# 3. Run
+export FORGE_PROVIDER=ollama
+export FORGE_MODEL=hf.co/Melvin56/Qwen2.5-Coder-7B-Instruct-abliterated-Q4_K_M-GGUF:Q4_K_M
+npx tsx cli/index.ts
+```
+
+### Anthropic (hosted)
+
+```bash
+git clone https://github.com/TushaeBXN/anthos-engineer.git
+cd anthos-engineer
+npm install
+npm install-scripts approve better-sqlite3 esbuild fsevents
+npm rebuild better-sqlite3
+
 export ANTHROPIC_API_KEY=sk-ant-...
 npx tsx cli/index.ts
 ```
