@@ -10,17 +10,21 @@
 import { glob } from "glob";
 import { runTurn } from "../agent/loop.js";
 import { createAgent } from "../agent/start.js";
+import { RC_PATH, writeRc } from "../agent/models.js";
 import { printHeader, printStatus, prompt, statusLine } from "../agent/ui.js";
 import { runCommand, type CommandContext } from "./commands.js";
 
 const HELP = `
-  forge                 Start a conversation
-  forge "<request>"     Do one thing and exit
-  forge init            Index the project
-  forge query <name>    Show what depends on a function or module
+  forge                          Start a conversation
+  forge "<request>"              Do one thing and exit
+  forge init                     Index the project
+  forge query <name>             Show what depends on a function or module
+  forge config set <key> <val>   Save a setting to ~/.forgerc
+  forge config get               Show the current ~/.forgerc
 
-  Choose a model with FORGE_PROVIDER and FORGE_MODEL.
-  Set a spending limit with FORGE_BUDGET_USD.
+  Keys: provider  model  baseUrl  budget  context  priceInput  priceOutput
+  Example: forge config set provider ollama
+           forge config set model hf.co/bartowski/Qwen2.5-Coder-14B-Instruct-abliterated-GGUF:Q4_K_M
 `;
 
 /** One request, then exit. */
@@ -98,6 +102,24 @@ async function main(): Promise<void> {
   if (command === undefined) return chat();
   if (command === "help" || command === "--help" || command === "-h") return console.log(HELP);
   if (command === "init") return init();
+  if (command === "config") {
+    const [sub, key, ...vals] = rest;
+    if (sub === "get" || sub === undefined) {
+      const fs = await import("node:fs");
+      const text = fs.default.existsSync(RC_PATH) ? fs.default.readFileSync(RC_PATH, "utf8") : "(no ~/.forgerc yet)";
+      console.log(`\n  ${RC_PATH}\n\n${text.replace(/^/gm, "  ")}`);
+      return;
+    }
+    if (sub === "set") {
+      if (!key || vals.length === 0) throw new Error("Usage: forge config set <key> <value>");
+      const val = vals.join(" ");
+      const numKeys = new Set(["budget", "context", "priceInput", "priceOutput"]);
+      writeRc({ [key]: numKeys.has(key) ? Number(val) : val });
+      console.log(`\n  Saved ${key}=${val} to ${RC_PATH}\n`);
+      return;
+    }
+    throw new Error(`Unknown config subcommand: ${sub}. Use "get" or "set".`);
+  }
   if (command === "query") {
     if (rest.length === 0) throw new Error("Usage: forge query <name>");
     return query(rest.join(" "));

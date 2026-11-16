@@ -2,7 +2,13 @@
  * What Forge knows about each model: who can see its weights, where it runs,
  * how much it can hold, and what it costs. APIs do not report most of this,
  * so it is kept here by hand. Update these tables when models change.
+ *
+ * Config precedence (highest to lowest):
+ *   FORGE_* env vars  →  ~/.forgerc  →  built-in defaults
  */
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
 export interface ModelInfo {
   provider: string;
@@ -49,17 +55,49 @@ const MODELS: Record<string, { contextWindow: number; price?: { input: number; o
   "gpt-4o": { contextWindow: 128_000 },
 };
 
+// ── Config file (~/.forgerc) ──────────────────────────────────────────────────
+
+interface ForgeRc {
+  provider?: string;
+  model?: string;
+  baseUrl?: string;
+  budget?: number;
+  context?: number;
+  priceInput?: number;
+  priceOutput?: number;
+}
+
+const RC_PATH = path.join(os.homedir(), ".forgerc");
+
+function readRc(): ForgeRc {
+  try {
+    return JSON.parse(fs.readFileSync(RC_PATH, "utf8")) as ForgeRc;
+  } catch {
+    return {};
+  }
+}
+
+export function writeRc(updates: Partial<ForgeRc>): void {
+  const current = readRc();
+  fs.writeFileSync(RC_PATH, JSON.stringify({ ...current, ...updates }, null, 2) + "\n", "utf8");
+}
+
+export { RC_PATH };
+
+// ── Resolve ───────────────────────────────────────────────────────────────────
+
 /** Work out which model to use, and what is known about it, from the environment. */
 export function resolveModel(env: Record<string, string | undefined> = process.env): ModelInfo {
-  const provider = (env["FORGE_PROVIDER"] ?? "anthropic").toLowerCase();
+  const rc = readRc();
+  const provider = (env["FORGE_PROVIDER"] ?? rc.provider ?? "anthropic").toLowerCase();
   const known = PROVIDERS[provider];
-  const model = env["FORGE_MODEL"] ?? known?.defaultModel;
+  const model = env["FORGE_MODEL"] ?? rc.model ?? known?.defaultModel;
   if (!model) throw new Error(`Set FORGE_MODEL to the model you want to use with "${provider}".`);
   const listed = MODELS[model];
 
   const runs = known?.runs ?? "hosted";
-  const priceIn = number(env["FORGE_PRICE_INPUT"]);
-  const priceOut = number(env["FORGE_PRICE_OUTPUT"]);
+  const priceIn = number(env["FORGE_PRICE_INPUT"]) ?? rc.priceInput ?? null;
+  const priceOut = number(env["FORGE_PRICE_OUTPUT"]) ?? rc.priceOutput ?? null;
   const price =
     priceIn !== null && priceOut !== null ? { input: priceIn, output: priceOut }
     : runs === "local" ? { input: 0, output: 0 }
@@ -70,9 +108,9 @@ export function resolveModel(env: Record<string, string | undefined> = process.e
     model,
     weights: known?.weights ?? "unknown",
     runs,
-    contextWindow: number(env["FORGE_CONTEXT"]) ?? listed?.contextWindow ?? null,
+    contextWindow: number(env["FORGE_CONTEXT"]) ?? rc.context ?? listed?.contextWindow ?? null,
     price,
-    baseUrl: env["FORGE_BASE_URL"] ?? known?.baseUrl,
+    baseUrl: env["FORGE_BASE_URL"] ?? rc.baseUrl ?? known?.baseUrl,
   };
 }
 
