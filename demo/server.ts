@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import fs from "node:fs";
 import { createSandbox, cleanupSandbox } from "./sandbox.js";
+import { resolveModel } from "../agent/models.js";
 
 const WORKER = path.join(fileURLToPath(import.meta.url), "../worker.ts");
 const PUBLIC = path.join(fileURLToPath(import.meta.url), "../public");
@@ -233,6 +234,7 @@ const server = createServer((req, res) => {
 
 server.listen(PORT, () => {
   console.log(`\nForge demo server running at http://localhost:${PORT}`);
-  console.log(`Provider: ${process.env["FORGE_PROVIDER"] ?? "anthropic"}`);
-  console.log(`Model:    ${process.env["FORGE_MODEL"] ?? "claude-sonnet-5-5"}\n`);
+  const model = resolveModel();
+  console.log(`Provider: ${model.provider}`);
+  console.log(`Model:    ${model.model}\n`);
 });

@@ -55,7 +55,7 @@ module.exports = async ({ github, context, core }) => {
   function isRuntimeSensitivePath(filename) {
     const path = filename.toLowerCase();
     if (path.startsWith('tests/') || path.startsWith('.github/')) return false;
-    return /^(?:cli\/|executor\/|policy\/|capability\/|llm\/|model\/|verify\/|diff\/)/.test(path)
+    return /^(?:cli\/|agent\/|tools\/|executor\/|policy\/|model\/|verify\/|diff\/)/.test(path)
       || /^(?:package\.json|package-lock\.json|tsconfig\.json|forge\.policy\.yaml)$/.test(path)
       || /\.(?:ts|js|mjs|cjs)$/.test(path);
   }

@@ -5,7 +5,6 @@ import path from "node:path";
 import os from "node:os";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { clearAllCapabilities } from "../capability/issuer.js";
 import {
   currentBranch,
   diffHash,
@@ -127,13 +126,11 @@ before(async () => {
 });
 
 after(async () => {
-  clearAllCapabilities();
   process.chdir(os.homedir());
   await fs.rm(tmpDir, { recursive: true, force: true });
 });
 
 beforeEach(() => {
-  clearAllCapabilities();
 });
 
 // ── currentBranch ─────────────────────────────────────────────────────────────

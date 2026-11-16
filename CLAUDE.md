@@ -4,59 +4,57 @@
 
 ```bash
 npm install
-npx tsx cli/index.ts init                              # index the repo
-npx tsx cli/index.ts query X                           # query dependents of X
-
-# Anthropic (default)
-export FORGE_PROVIDER=anthropic ANTHROPIC_API_KEY=sk-ant-...
-# OpenAI
-export FORGE_PROVIDER=openai OPENAI_API_KEY=sk-...
-# Ollama (local, no key needed)
-export FORGE_PROVIDER=ollama FORGE_MODEL=llama3.1:70b
-
-npx tsx cli/index.ts change "add a health endpoint"    # LLM-driven change
+npx tsx cli/index.ts                 # start a conversation
+npx tsx cli/index.ts "<request>"     # do one thing and exit
+npx tsx cli/index.ts init            # index the repo for find_dependents
 ```
 
-Requires: Node.js 22+, npm. For `forge change`: set `FORGE_PROVIDER` and the matching API key (Ollama needs no key).
+Requires Node.js 22+. Choose a model with `FORGE_PROVIDER` and `FORGE_MODEL`; see the README.
 
-## Architecture Invariants
+## How it works
 
-- **No code path outside `executor/` may touch `fs` or `shell` for agent-driven changes.** The executor re-validates the capability token before every operation.
-- **Nothing writes to the materialized graph directly.** Every mutation goes through an event in `events.ts` first; `graph.ts` applies events. This keeps "why does Forge think X" answerable by log lookup.
-- **Normalization happens once.** `policy/evaluator.ts` normalizes an ActionRequest before matching rules. Resource-specific checks are constraint validators that plug in after the generic match — not separate per-resource logic.
-- **`forge change` flow**: LLM plan → Permission Broker (evaluate) → user approval → Capability Executor (writeFile) → localInvalidation → Verification Chain → Semantic Diff.
+`agent/loop.ts` is the whole design: send the conversation to the model; if it asks for tools, check each with `policy/check.ts`, run it, send the results back; repeat until it answers without a tool call.
 
-## Module Map
+## Rules to keep
+
+- **Every tool call goes through `check()` in the loop.** Tools do not check policy themselves, and nothing runs a tool except the loop.
+- **A tool is one object in `tools/`**: a description, an input schema, `access()` (what it touches, for the policy), `label()` (one line for the screen) and `run()`. Add it to `tools/index.ts`.
+- **Providers translate, nothing more.** `agent/providers/*` turn the shared types in `agent/types.ts` into one API's format and back. The loop and tools never import an SDK.
+- **Everything printed goes through `agent/ui.ts`.** Model text at full strength; everything Forge adds is dim and indented. No banners, boxes or progress bars.
+- **Model facts live in `agent/models.ts`**: open or closed, local or hosted, context size, price. Do not guess a price; leave it out.
+- **Nothing writes to the dependency graph directly.** Changes go through an event in `model/events.ts`; `model/graph.ts` applies events.
+
+## Module map
 
 | Module | Responsibility |
 |---|---|
-| `model/schema.ts` | Core types: SystemNode, SystemEdge, ForgeEventPayload |
-| `model/events.ts` | Append-only SQLite event log |
-| `model/graph.ts` | In-memory materialized view + transitive dependent lookup |
-| `model/extractor.ts` | Extractor interface |
-| `model/typescript/ts-extractor.ts` | ts-morph extraction |
-| `model/incremental.ts` | localInvalidation, dependencyInvalidation, initFromFiles |
-| `policy/parser.ts` | Load forge.policy.yaml (deny-by-default) |
-| `policy/evaluator.ts` | evaluate() + normalize() |
-| `policy/audit.ts` | Append-only decision audit log |
-| `capability/issuer.ts` | Issue / revoke short-lived capability tokens (60s TTL) |
-| `executor/filesystem.ts` | The ONLY code path that calls fs for agent writes |
-| `executor/shell.ts` | Whitelisted shell commands via capability token |
-| `verify/chain.ts` | tsc → test → lint pipeline, all stages run even on failure |
-| `diff/semantic.ts` | Graph events → human-readable grouped diff + blast radius |
-| `llm/schema.ts` | Shared Plan types + JSON Schema for propose_plan tool |
-| `llm/planner.ts` | Provider selection (FORGE_PROVIDER), system summary, dispatch to provider |
-| `llm/providers/anthropic.ts` | Anthropic SDK provider |
-| `llm/providers/openai-compatible.ts` | OpenAI-compatible provider (OpenAI, Ollama, Groq, Together, LM Studio, …) |
-| `cli/index.ts` | forge init / forge query / forge change |
+| `agent/loop.ts` | The agent loop |
+| `agent/start.ts` | Build an agent: model, tools, policy, approvals, system prompt |
+| `agent/types.ts` | Shared shapes: ToolCall, ToolResult, Reply, Session, Tool |
+| `agent/models.ts` | Provider and model lookup tables |
+| `agent/usage.ts` | Token, cost and line counts; status line |
+| `agent/ui.ts` | Terminal output and prompts |
+| `agent/providers/anthropic.ts` | Anthropic SDK |
+| `agent/providers/openai.ts` | OpenAI-compatible APIs (OpenAI, Ollama, LM Studio, Groq, Together) |
+| `tools/files.ts` | read, write, edit |
+| `tools/search.ts` | glob, grep |
+| `tools/bash.ts` | bash |
+| `tools/project.ts` | find_dependents, verify |
+| `policy/check.ts` | allow / ask / deny for one tool call |
+| `policy/evaluator.ts` | Match a request against the rules |
+| `policy/parser.ts` | Load forge.policy.yaml |
+| `policy/audit.ts` | Audit log (`.forge/audit.db`) |
+| `model/*` | Dependency index (`.forge/events.db`) |
+| `verify/chain.ts` | Type check → tests → lint |
+| `executor/git.ts` | Guarded git helpers |
+| `diff/semantic.ts` | Group index changes by area (demo) |
+| `demo/*` | Web demo running the same loop in a sandbox |
+| `cli/index.ts` | The forge command |
 
-## Event store location
-
-`.forge/events.db` in the working directory. Delete to reset.
-
-## Build
+## Build and test
 
 ```bash
-npm run build   # tsc → dist/
-npm test        # 40 tests across policy, executor, verify, diff suites
+npm run build              # tsc → dist/
+npm test
+./node_modules/.bin/tsc --noEmit
 ```

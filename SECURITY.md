@@ -9,10 +9,10 @@ Security fixes are handled on `main`. Use the latest commit.
 ## Deployment Guidance
 
 - Review `forge.policy.yaml` before running in any environment. The deny-by-default policy is your primary control — understand what you are allowing before granting broad filesystem or shell access.
-- Capability tokens are scoped and short-lived (60-second TTL). The executor re-validates before every operation.
+- Every tool call is checked against the policy (`policy/check.ts`) immediately before it runs: allow, ask the user, or deny.
 - Keep API keys (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, etc.) out of version control. Use `.env` files or environment variable injection.
 - The `.forge/` directory contains the append-only event and audit logs. Do not delete it unless you intend to reset the system model.
-- Treat `executor/filesystem.ts` and `executor/shell.ts` as the trust boundary — no other code path should write files or invoke the shell for agent-driven changes.
+- Treat `agent/loop.ts` and `policy/check.ts` as the trust boundary — no other code path should run a tool. The shell check reads the command text; it is not a sandbox.
 
 ## Publishing A Fork
 

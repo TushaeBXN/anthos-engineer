@@ -513,13 +513,13 @@ body {
   <!-- Hero -->
   <section class="hero">
     <div class="hero-eyebrow">Model-agnostic engineering agent</div>
-    <h1 class="hero-title">The LLM plans.<br><span class="accent">The platform enforces.</span></h1>
+    <h1 class="hero-title">The model works.<br><span class="accent">The policy decides.</span></h1>
     <p class="hero-sub">
-      Forge treats the LLM as an untrusted planner — a deny-by-default policy broker, short-lived capability tokens, and a mandatory verification chain run the same way regardless of which model you use.
+      Forge lets the model drive, one tool call at a time — and checks every call against a deny-by-default policy you own, then verifies the result, the same way regardless of which model you use.
     </p>
     <div class="hero-badges">
       <span class="badge green">deny-by-default policy</span>
-      <span class="badge green">60s capability tokens</span>
+      <span class="badge green">every tool call checked</span>
       <span class="badge green">tsc → test → lint</span>
       <span class="badge blue">anthropic · openai · ollama · groq</span>
       <span class="badge orange">debug &amp; error analysis</span>
@@ -590,9 +590,9 @@ body {
     <div class="how-label">Pipeline</div>
     <div class="flow">
       <div class="flow-step"><div class="flow-box">System Model</div><span class="flow-arrow">→</span></div>
-      <div class="flow-step"><div class="flow-box">LLM Plan</div><span class="flow-arrow">→</span></div>
+      <div class="flow-step"><div class="flow-box">Agent Loop</div><span class="flow-arrow">→</span></div>
       <div class="flow-step"><div class="flow-box">Policy Broker</div><span class="flow-arrow">→</span></div>
-      <div class="flow-step"><div class="flow-box">Capability Executor</div><span class="flow-arrow">→</span></div>
+      <div class="flow-step"><div class="flow-box">File Changes</div><span class="flow-arrow">→</span></div>
       <div class="flow-step"><div class="flow-box">Verify Chain</div><span class="flow-arrow">→</span></div>
       <div class="flow-step"><div class="flow-box">Semantic Diff</div></div>
     </div>
@@ -807,13 +807,13 @@ function showToast() {
 // ── Pipeline ─────────────────────────────────────────────────────────────────
 const STEPS = [
   { id:'model',     label:'System Model',       num:'01' },
-  { id:'planning',  label:'LLM Planning',        num:'02' },
+  { id:'planning',  label:'Agent Loop',          num:'02' },
   { id:'policy',    label:'Policy Evaluation',   num:'03' },
-  { id:'execution', label:'Capability Executor', num:'04' },
+  { id:'execution', label:'File Changes',        num:'04' },
   { id:'verify',    label:'Verification Chain',  num:'05' },
   { id:'diff',      label:'Semantic Diff',       num:'06' },
 ];
-let stepEls={}, stepState={}, stepStart={}, policyRows=[], capRows=[], fileRows=[], verifyStages=[];
+let stepEls={}, stepState={}, stepStart={}, policyRows=[], fileRows=[], verifyStages=[];
 
 function ico(s){
   if(s==='running') return `<span class="spin">◌</span>`;
@@ -833,7 +833,7 @@ function buildPipeline(){
   pane.innerHTML=''; pane.hidden=false;
   document.getElementById('empty').hidden=true;
   stepEls={}; stepState={};
-  policyRows=[]; capRows=[]; fileRows=[]; verifyStages=[];
+  policyRows=[]; fileRows=[]; verifyStages=[];
   debugLines=[];
   document.getElementById('debug-log').innerHTML='';
   document.getElementById('debug-count').textContent='0';
@@ -904,17 +904,12 @@ function handleEvent(ev){
       break;
     }
 
-    case 'capability':{
-      setState('policy','passed');
-      setState('execution','running');
-      capRows.push(ev);
-      const caps=capRows.map(c=>`<div class="token-row"><span class="token-id" onclick="copyText('${c.id}')" title="Click to copy">${c.id}</span><span class="token-scope">${c.resource}:${c.operation} → ${c.targetGlob}</span><span class="token-ttl">60s</span></div>`).join('');
-      const files=fileRows.map(f=>`<div class="file-row"><span class="file-plus">+</span><span>${f.file}</span><span class="file-bytes">${f.bytes}B</span></div>`).join('');
-      setBody('execution',`${caps}<div id="flist">${files}</div>`);
-      break;
-    }
-
     case 'file-written':{
+      if(stepState.execution!=='running'){
+        setState('policy','passed');
+        setState('execution','running');
+        setBody('execution','<div id="flist"></div>');
+      }
       fileRows.push(ev);
       const fl=document.getElementById('flist');
       if(fl) fl.innerHTML=fileRows.map(f=>`<div class="file-row" style="margin-top:4px"><span class="file-plus">+</span><span style="color:var(--fg)">${f.file}</span><span class="file-bytes">${f.bytes}B</span></div>`).join('');
@@ -934,7 +929,12 @@ function handleEvent(ev){
       break;
     }
 
+    case 'usage':
+      pushDebug(ev.parts.join('    '), false);
+      break;
+
     case 'verify-start':
+      if(stepState.policy==='running') setState('policy','passed');
       setState('execution','passed');
       setState('verify','running');
       verifyStages=[];

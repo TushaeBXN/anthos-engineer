@@ -4,6 +4,7 @@
 
 ```bash
 npm install
+npx tsx cli/index.ts           # start a conversation
 npx tsx cli/index.ts init      # index the repo
 npx tsx cli/index.ts query X   # query dependents of X
 ```
@@ -12,7 +13,7 @@ Requires: Node.js 22+, npm
 
 ## Architecture Invariants
 
-- **No code path outside `executor/` may touch `fs` or `shell` for agent-driven changes.** The executor re-validates the capability token before every operation.
+- **Every tool call goes through `check()` in `agent/loop.ts` before it runs.** Tools do not check policy themselves, and nothing runs a tool except the loop.
 - **Nothing writes to the materialized graph directly.** Every mutation goes through an event in `events.ts` first; `graph.ts` applies events. This keeps "why does Forge think X" answerable by log lookup.
 - **Normalization happens once.** `policy/evaluator.ts` (Step 2) normalizes an ActionRequest before matching rules. Resource-specific checks are constraint validators that plug in after the generic match — not separate per-resource logic.
 
@@ -26,7 +27,10 @@ Requires: Node.js 22+, npm
 | `model/extractor.ts` | Extractor interface |
 | `model/typescript/ts-extractor.ts` | ts-morph extraction |
 | `model/incremental.ts` | localInvalidation, dependencyInvalidation, initFromFiles |
-| `cli/index.ts` | forge init / forge query |
+| `agent/loop.ts` | The agent loop |
+| `tools/*` | read, write, edit, glob, grep, bash, find_dependents, verify |
+| `policy/check.ts` | allow / ask / deny for one tool call |
+| `cli/index.ts` | The forge command |
 
 ## Event store location
 
@@ -56,5 +60,5 @@ edit `.git/`, merge your own PR, or skip verification.
 
 If you are unsure, stop and ask. Stopping is always acceptable; guessing is not.
 
-All git operations route through `executor/git.ts`, which enforces these rules
-at the execution layer in addition to policy evaluation.
+Git commands run through the `bash` tool and are checked against
+`forge.policy.yaml` first, which denies force-pushes and pushes to `main`/`master`.

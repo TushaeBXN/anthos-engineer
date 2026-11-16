@@ -1,7 +1,7 @@
 {
   "name": "forge-anthos-intelligence",
   "version": "1.0.0",
-  "description": "Forge by Anthos Intelligence — software engineering agent architecture",
+  "description": "Forge by Anthos Intelligence — a software engineering agent for your terminal",
   "type": "module",
   "scripts": {
     "build": "tsc",
@@ -15,7 +15,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.124.0",
     "@types/js-yaml": "^4.0.9",
-    "better-sqlite3": "^9.6.0",
+    "better-sqlite3": "^13.2.0",
     "glob": "^11.0.0",
     "js-yaml": "^5.4.1",
     "minimatch": "^10.2.6",

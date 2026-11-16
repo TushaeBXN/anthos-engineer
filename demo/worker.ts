@@ -1,5 +1,6 @@
 /**
  * Demo worker — runs as a subprocess.
+ * Runs the same agent loop as the forge command, in a sandbox.
  * Receives: argv[2] = goal, argv[3] = sandboxDir
  * Emits JSON-line events to stdout, each prefixed with "EVENT:"
  * so the server can distinguish them from other Node.js output.
@@ -10,14 +11,12 @@ import { resetDb, getLatestEventId, getEventsSince } from "../model/events.js";
 import { resetGraph, getGraph } from "../model/graph.js";
 import { initFromFiles, localInvalidation, rebuildGraph } from "../model/incremental.js";
 import { TypeScriptExtractor } from "../model/typescript/ts-extractor.js";
-import { loadPolicy } from "../policy/parser.js";
-import { evaluate } from "../policy/evaluator.js";
-import { issueCapability } from "../capability/issuer.js";
-import { writeFile } from "../executor/filesystem.js";
+import fs from "node:fs";
+import path from "node:path";
+import { runTurn } from "../agent/loop.js";
+import { createAgent } from "../agent/start.js";
 import { runVerificationChain } from "../verify/chain.js";
 import { computeSemanticDiff } from "../diff/semantic.js";
-import { planChange } from "../llm/planner.js";
-import type { ActionRequest } from "../policy/schema.js";
 
 const goal = process.argv[2] ?? "";
 const sandboxDir = process.argv[3] ?? process.cwd();
@@ -53,81 +52,58 @@ async function run(): Promise<void> {
     functions: nodes.filter((n) => n.kind === "function").length,
   });
 
-  // ── 2. Plan via LLM ───────────────────────────────────────────────────────
-  const provider = process.env["FORGE_PROVIDER"] ?? "anthropic";
-  const model = process.env["FORGE_MODEL"] ?? (provider === "anthropic" ? "claude-sonnet-5-5" : "gpt-4o");
-  emit({ type: "planning", provider, model });
+  // ── 2. Run the agent loop, reporting each step to the page ────────────────
+  const agent = createAgent(sandboxDir);
+  emit({ type: "planning", provider: agent.usage.model.provider, model: agent.usage.model.model });
 
-  const plan = await planChange(goal, graph);
-  emit({
-    type: "plan",
-    rationale: plan.rationale,
-    steps: plan.operations.map((op) => ({
-      op: op.operation,
-      file: op.filePath,
-      rationale: op.rationale,
-    })),
-  });
+  let planShown = false;
+  const showPlan = (text: string): void => {
+    if (planShown) return;
+    planShown = true;
+    emit({ type: "plan", rationale: text, steps: [] });
+  };
 
-  // ── 3. Policy evaluation ──────────────────────────────────────────────────
-  const policy = loadPolicy();
-  const agentId = "forge-demo";
-  const sessionId = crypto.randomUUID();
-
-  const evaluated = plan.operations.map((op) => {
-    const req: ActionRequest = {
-      resource: "filesystem",
-      operation: "write",
-      target: op.filePath,
-      agentId,
-      sessionId,
-    };
-    const decision = evaluate(req, policy);
+  agent.screen = {
+    say(text) {
+      if (planShown) emit({ type: "status", message: text });
+      else showPlan(text);
+    },
+    activity(label, detail, failed) {
+      const [verb, file] = label.split(" ");
+      if (!failed && (verb === "Write" || verb === "Edit") && file) {
+        const bytes = fs.statSync(path.join(sandboxDir, file)).size;
+        emit({ type: "file-written", file, bytes });
+      } else {
+        emit({ type: "status", message: detail ? `${label} (${detail})` : label });
+      }
+    },
+    note: (text) => emit({ type: "status", message: text }),
+    working: () => {},
+  };
+  // Nobody is at a keyboard in the demo, so anything the policy does not allow outright is refused.
+  agent.approve = async () => false;
+  agent.audit = (record) => {
+    if (record.request.resource === "filesystem" && record.request.operation === "read") return;
+    showPlan("Working through the change step by step.");
     emit({
       type: "policy",
-      file: op.filePath,
-      decision: decision.decision,
-      rule: decision.matchedRuleId,
-      reason: decision.reason,
+      file: record.request.resource === "filesystem" ? record.request.target : `${record.request.resource} ${record.request.operation}`,
+      decision: record.decision,
+      rule: record.matchedRuleId,
+      reason: record.reason,
     });
-    return { op, req, decision };
-  });
+  };
 
-  const denied = evaluated.filter((e) => e.decision.decision === "deny");
-  if (denied.length > 0) {
-    throw new Error(
-      `${denied.length} operation(s) denied by policy: ${denied.map((d) => d.op.filePath).join(", ")}`,
-    );
-  }
+  await runTurn(goal, agent);
+  emit({ type: "usage", parts: agent.usage.statusParts() });
 
-  // ── 4. Execute via capability executor ───────────────────────────────────
+  // ── 3. Update the index for the files that changed ────────────────────────
   rebuildGraph();
   const changeEvents: ReturnType<typeof getEventsSince> = [];
-
-  for (const { op, decision } of evaluated) {
-    const cap = issueCapability(decision, 60);
-    emit({
-      type: "capability",
-      id: cap.id.slice(0, 8) + "…",
-      resource: cap.resource,
-      operation: cap.operation,
-      expiresAt: cap.expiresAt,
-      targetGlob: cap.targetGlob,
-    });
-
-    const result = await writeFile(cap.id, op.filePath, op.content);
-    if (!result.success) {
-      throw new Error(`Failed to write ${op.filePath}: ${result.error}`);
-    }
-    emit({
-      type: "file-written",
-      file: op.filePath,
-      bytes: result.bytesAffected ?? 0,
-    });
-
+  for (const file of agent.usage.changedFiles) {
     const beforeId = getLatestEventId();
     try {
-      await localInvalidation(op.filePath, extractor);
+      await localInvalidation(file, extractor);
     } catch {
       // Non-fatal — semantic diff may be incomplete
     }

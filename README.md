@@ -2,7 +2,7 @@
 
 # Forge by Anthos Intelligence
 
-**Staged TypeScript software engineering agent — event-sourced system model, deny-by-default permission broker, capability executor, verification chain, and LLM-driven change planning.**
+**A software engineering agent for your terminal. It reads, edits and runs your code one step at a time, checks every step against a policy you own, and works with open or closed models.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178c6.svg?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -12,272 +12,226 @@
 
 ---
 
-## What It Is
+## What it is
 
-Forge is a software engineering agent where the LLM is a planning component, not the runtime. The durable platform beneath it enforces security, auditability, and correctness regardless of which model you use.
+Forge is one loop:
 
-Four invariants hold across every change:
+1. Send the conversation to the model.
+2. If the model asks for a tool, check it against your policy, run it, and send the result back.
+3. Repeat until the model answers without asking for a tool.
 
-1. **Event-sourced System Model** — the codebase is represented as an append-only graph of functions, modules, and dependencies. Nothing writes to the graph directly; everything goes through events first.
-2. **Deny-by-default Permission Broker** — every agent action is normalized into one shape (`ActionRequest`) and matched against a policy file before anything happens. `git push` and `shell: "git push"` hit the same decision path.
-3. **Capability Executor** — the only component allowed to touch the real filesystem or shell. Agents never get raw handles; they get short-lived, scoped capability tokens (60-second TTL, re-validated before every operation).
-4. **Verification Chain** — every change runs `tsc --noEmit → test → lint` before being considered done. All stages run even if an earlier one fails, so you get the full picture.
+Everything else serves that loop.
 
----
-
-## How Forge Differs from Claude Code and OpenAI Codex
-
-Claude Code and Codex are excellent at generating code. Forge is built around a different question: **what happens after the LLM produces a plan?**
-
-| | Claude Code / Codex | Forge |
-|---|---|---|
-| **Codebase understanding** | Reads files on demand | Maintains a persistent, event-sourced graph of every function, module, import, and call relationship — queryable for transitive dependencies and blast radius before any change is made |
-| **Permission model** | Runs with the permissions of the current user | Deny-by-default policy broker — every action is normalized into one shape and evaluated against a YAML policy before it reaches the filesystem or shell |
-| **Filesystem access** | LLM tools call `fs` / shell directly | Agents never get raw handles — only `executor/filesystem.ts` may write files, and only after re-validating a scoped, 60-second capability token on every operation |
-| **Audit trail** | Session logs | Append-only SQLite audit log of every policy decision (allow / deny / requires_approval) with matched rule, agent id, and timestamp — immutable by design |
-| **Verification** | Optional, triggered by the user | Mandatory after every change — `tsc --noEmit → test → lint` all run before a change is considered done, even if an earlier stage fails |
-| **Blast-radius awareness** | None | Before and after every change, Forge knows exactly which nodes transitively depend on the affected functions — the semantic diff includes a blast-radius count |
-| **LLM role** | Plans and executes | Plans only — a deterministic executor runs the plan, re-validates permissions at every step, and the LLM never directly touches the filesystem or shell |
-| **Model lock-in** | Claude (Claude Code) / OpenAI (Codex) | Model-agnostic — drop in any provider via `FORGE_PROVIDER`; the permission, execution, and verification layers are independent of which LLM planned the change |
-| **Policy ownership** | Controlled by the tool vendor | A `forge.policy.yaml` you own and version-control alongside your code |
-
-### The core difference in one sentence
-
-Claude Code and Codex trust the LLM to make safe decisions. Forge treats the LLM as an untrusted planner and enforces safety at the execution layer — the same way you would enforce it for any other untrusted process on your system.
+```
+agent/loop.ts      the loop
+tools/             what the model can do: read, write, edit, glob, grep, bash, find_dependents, verify
+policy/check.ts    the one permission check, run before every tool call
+agent/usage.ts     the status line
+```
 
 ---
 
-## Quick Start
+## Quick start
+
+Requires Node.js 22 or later.
 
 ```bash
 npm install
-
-# Index the repo
-npx tsx cli/index.ts init
-
-# Ask Forge to make a change (uses whichever provider you configure — see below)
-npx tsx cli/index.ts change "add a health check endpoint"
-
-# Query what depends on something
-npx tsx cli/index.ts query getHealth
-```
-
-Or install globally after building:
-
-```bash
-npm run build && npm link
-forge init
-forge change "add a health check endpoint"
-```
-
----
-
-## Choosing Your LLM
-
-Forge works with any model that supports function calling / tool use. Set two env vars and you're done — the permission broker, executor, verification chain, and semantic diff all run identically no matter which model planned the change.
-
-| Provider | `FORGE_PROVIDER` | Key env var | `FORGE_BASE_URL` |
-|---|---|---|---|
-| **Anthropic** (default) | `anthropic` | `ANTHROPIC_API_KEY` | — |
-| **OpenAI** | `openai` | `OPENAI_API_KEY` | — |
-| **Ollama** (local) | `ollama` | — | auto-set to `http://localhost:11434/v1` |
-| **Groq** | `groq` | `OPENAI_API_KEY` | `https://api.groq.com/openai/v1` |
-| **Together AI** | `together` | `OPENAI_API_KEY` | `https://api.together.xyz/v1` |
-| **LM Studio** | `lmstudio` | — | `http://localhost:1234/v1` |
-| **Any OpenAI-compatible** | any string | `OPENAI_API_KEY` | your endpoint URL |
-
-Override the model name with `FORGE_MODEL`:
-
-```bash
-# Anthropic
-export FORGE_PROVIDER=anthropic
 export ANTHROPIC_API_KEY=sk-ant-...
-export FORGE_MODEL=claude-sonnet-5   # default: claude-opus-5
-
-# OpenAI
-export FORGE_PROVIDER=openai
-export OPENAI_API_KEY=sk-...
-export FORGE_MODEL=gpt-4o            # default: gpt-4o
-
-# Ollama — no API key needed; pull the model first
-export FORGE_PROVIDER=ollama
-export FORGE_MODEL=llama3.1:70b
-ollama pull llama3.1:70b
-
-# Groq (fast hosted inference)
-export FORGE_PROVIDER=groq
-export OPENAI_API_KEY=gsk_...
-export FORGE_BASE_URL=https://api.groq.com/openai/v1
-export FORGE_MODEL=llama-3.3-70b-versatile
-
-# LM Studio
-export FORGE_PROVIDER=lmstudio
-export FORGE_BASE_URL=http://localhost:1234/v1
-export FORGE_MODEL=your-loaded-model
+npx tsx cli/index.ts
 ```
 
----
-
-## How `forge change` Works
-
 ```
-Goal: "add a health check endpoint"
-        │
-        ▼
-  LLM (Claude API)
-  ──────────────────────────────────────────
-  Receives compact system model summary
-  Returns structured plan via tool_use:
-    CREATE src/api/health.ts   — health handler
-    MODIFY src/index.ts        — wire the route
-        │
-        ▼
-  Permission Broker
-  ──────────────────────────────────────────
-  evaluate(ActionRequest, policy) → allow | deny | requires_approval
-  Hard deny: ~/.ssh/**, ~/.aws/**
-  Requires approval: git push
-        │
-        ▼
-  User Approval Prompt  [y/N]
-        │
-        ▼
-  Capability Executor
-  ──────────────────────────────────────────
-  issueCapability(decision, 60s TTL)
-  writeFile(capabilityId, path, content)
-  Re-validates before every write
-        │
-        ▼
-  Verification Chain
-  ──────────────────────────────────────────
-  tsc --noEmit → npm test → eslint
-  All stages run even on failure
-        │
-        ▼
-  Semantic Diff
-  ──────────────────────────────────────────
-  Grouped by category (API / Tests / Database / …)
-  Blast-radius count from transitive dependents
+  Forge
+
+  claude-opus-5-5 · closed · hosted    0 used, 1M left    $0.00 used
+
+› add a health check endpoint
+  Find src/**/*.ts
+  Read src/api.ts
+  Edit src/api.ts  +9 −0
+  Verify
+
+I added GET /health to src/api.ts. Type check and tests pass.
+
+  claude-opus-5-5 · closed · hosted    14k used, 986k left    $0.07 used    +9 −0 in 1 file
 ```
 
----
-
-## Commands
-
-| Command | Description |
+| Command | What it does |
 |---|---|
-| `forge init` | Index the repo — extract all TS nodes/edges into the event log |
-| `forge query <name>` | Show transitive dependents of a function or module |
-| `forge change "<goal>"` | Plan, approve, and execute a change via LLM |
+| `forge` | Start a conversation |
+| `forge "<request>"` | Do one thing and exit |
+| `forge init` | Index the project, so `find_dependents` works |
+| `forge query <name>` | Show what depends on a function or module |
+
+To install the `forge` command itself: `npm run build && npm link`.
 
 ---
 
-## Project Structure
+## The status line
 
-```
-model/
-├── schema.ts              # SystemNode, SystemEdge, event union types
-├── events.ts              # append-only SQLite event log (.forge/events.db)
-├── graph.ts               # in-memory materialized view; rebuilt by replaying events
-├── extractor.ts           # Extractor interface
-├── typescript/
-│   └── ts-extractor.ts    # ts-morph: functions, modules, imports, calls + confidence
-└── incremental.ts         # localInvalidation, dependencyInvalidation (lazy + cached)
+After every turn Forge prints one line that answers three questions.
 
-policy/
-├── schema.ts              # ActionRequest, PolicyRule, PolicyDecision types
-├── parser.ts              # load forge.policy.yaml
-├── evaluator.ts           # normalize → match → decide
-└── audit.ts               # append-only decision log (.forge/audit.db)
+| Part | Example | Meaning |
+|---|---|---|
+| What am I running? | `gemma · open · local` | The model; whether its weights are **open** or **closed**; whether it runs on this machine (**local**) or your code is sent to a server (**hosted**) |
+| How much have I used, and how much is left? | `61k used, 939k left` | Tokens in the conversation, against the model's limit |
+| | `$0.84 used, $4.16 left` | Estimated cost, against the budget you set |
+| How much code changed? | `+124 −31 in 4 files` | Lines the agent added and removed |
 
-capability/
-├── schema.ts              # Capability, CapabilityError
-└── issuer.ts              # issue / revoke short-lived tokens (60s default TTL)
+Parts that are not known are left out rather than guessed. A local model shows `free`. A model with no listed price shows no cost.
 
-executor/
-├── filesystem.ts          # THE ONLY FILE allowed to call Node's fs for agent writes
-└── shell.ts               # whitelisted shell commands (npm test, tsc, eslint)
+| Setting | Effect |
+|---|---|
+| `FORGE_BUDGET_USD=5` | Shows dollars left, and stops the agent when the budget is spent |
+| `FORGE_CONTEXT=8192` | The model's context size, when Forge does not know it (most local models) |
+| `FORGE_PRICE_INPUT`, `FORGE_PRICE_OUTPUT` | Dollars per million tokens, when Forge does not know the price |
 
-verify/
-└── chain.ts               # tsc → test → lint; all stages run on failure
-
-diff/
-└── semantic.ts            # graph events → grouped human-readable diff + blast radius
-
-llm/
-└── planner.ts             # build system summary; call Claude API via tool_use
-
-cli/
-└── index.ts               # forge init | forge query | forge change
-```
+Two limits to know about. No provider reports your account balance through its API, so "left" is always measured against the model's context size or your own budget. And cost is an estimate from token counts and the price table in `agent/models.ts`, which needs updating when prices change.
 
 ---
 
-## Policy File (`forge.policy.yaml`)
+## Choosing a model
+
+| Provider | `FORGE_PROVIDER` | Weights | Runs | Needs |
+|---|---|---|---|---|
+| Anthropic (default) | `anthropic` | closed | hosted | `ANTHROPIC_API_KEY` |
+| OpenAI | `openai` | closed | hosted | `OPENAI_API_KEY` |
+| Ollama | `ollama` | open | local | `ollama pull <model>` |
+| LM Studio | `lmstudio` | open | local | `FORGE_MODEL` |
+| Groq | `groq` | open | hosted | `OPENAI_API_KEY` |
+| Together AI | `together` | open | hosted | `OPENAI_API_KEY`, `FORGE_MODEL` |
+| Any OpenAI-compatible server | any name | unknown | hosted | `FORGE_BASE_URL`, `FORGE_MODEL` |
+
+```bash
+# A local open model
+export FORGE_PROVIDER=ollama FORGE_MODEL=llama3.1 FORGE_CONTEXT=8192
+
+# A different Claude model (default: claude-opus-5-5)
+export FORGE_MODEL=claude-sonnet-5-5
+```
+
+The model must support tool calling. On the Claude models that support it, Forge turns on server-side fallback, so a request one model declines is retried on another inside the same call.
+
+---
+
+## Permissions
+
+Before any tool runs, `policy/check.ts` gives one of three answers.
+
+| Answer | When | What happens |
+|---|---|---|
+| **allow** | A rule in `forge.policy.yaml` permits it | It runs |
+| **ask** | A rule requires approval, or no rule covers it | Forge asks you: yes, no, or always for this session |
+| **deny** | A rule forbids it | It never runs, and you are not asked |
+
+When nobody is at the keyboard (a script, the demo), every **ask** is refused.
 
 ```yaml
 version: 1
 default: deny
 
 rules:
-  - id: deny-ssh
-    resource: filesystem
-    operation: "*"
-    target: "~/.ssh/**"
-    effect: deny
-
-  - id: deny-aws
-    resource: filesystem
-    operation: "*"
-    target: "~/.aws/**"
-    effect: deny
-
-  - id: allow-reads
-    resource: filesystem
-    operation: read
-    target: "**"
-    effect: allow
-
   - id: allow-src-writes
     resource: filesystem
     operation: write
     target: "src/**"
     effect: allow
 
-  - id: git-push-approval
-    resource: git
-    operation: push
+  - id: allow-test-runner
+    resource: shell
+    operation: npm test        # also covers "npm test -- --watch"
     target: "*"
     effect: allow
-    requires_approval: true
+
+  - id: deny-push-main
+    resource: git
+    operation: push
+    target: "main"
+    effect: deny
+```
+
+What the check does beyond matching rules:
+
+- Paths are resolved first, symlinks included, so `src/../../x` or a link that leaves the project is not treated as inside `src/`.
+- Each command in a chain is checked on its own, so `npm test && git push origin main` is still denied.
+- Commands that use redirection or substitution always ask.
+- Forge never writes to `forge.policy.yaml`, `.forge/` or `.git/`.
+- Every rule match, and every answer you give, is recorded in `.forge/audit.db`.
+
+The shell check reads the command text; it is not a sandbox. A command you approve can do anything your user account can.
+
+---
+
+## How Forge compares to Claude Code
+
+Forge follows the same design as Claude Code: a model in a loop with file, search and shell tools, and a permission check before each call. Claude Code is far more complete (streaming, context compaction, subagents, hooks, sandboxing, MCP, IDE integrations).
+
+What Forge adds:
+
+| | Forge |
+|---|---|
+| **Any model** | Runs on open models through Ollama, LM Studio, Groq or Together, as well as Claude and OpenAI models |
+| **Open or closed, local or hosted** | Always on screen, so you know whether your code is leaving your machine |
+| **Dependency graph** | `forge init` builds an index of functions, modules and calls; the model can ask what depends on something before changing it |
+| **Audit log** | Every policy decision is kept in a local SQLite file |
+| **Small enough to read** | The loop is about 120 lines; each tool is one short function |
+
+---
+
+## Project structure
+
+```
+agent/
+├── loop.ts              # the agent loop
+├── start.ts             # builds an agent from the environment
+├── types.ts             # the shapes shared by loop, tools and providers
+├── models.ts            # what is known about each model: open/closed, context, price
+├── usage.ts             # token, cost and line counts; the status line
+├── ui.ts                # everything Forge prints
+└── providers/
+    ├── anthropic.ts     # Claude, through the Anthropic SDK
+    └── openai.ts        # anything that speaks the OpenAI chat API
+
+tools/
+├── files.ts             # read, write, edit
+├── search.ts            # glob, grep
+├── bash.ts              # bash
+├── project.ts           # find_dependents, verify
+└── index.ts             # the list of tools
+
+policy/
+├── check.ts             # allow / ask / deny for one tool call
+├── evaluator.ts         # match a request against the rules
+├── parser.ts            # load forge.policy.yaml
+└── audit.ts             # the audit log (.forge/audit.db)
+
+model/                   # the dependency index behind find_dependents (.forge/events.db)
+verify/chain.ts          # type check → tests → lint, behind the verify tool
+executor/git.ts          # guarded git helpers: forge/* branches, no push to main
+diff/semantic.ts         # groups index changes by area; used by the demo
+demo/                    # a web page that runs the same loop in a sandbox
+cli/index.ts             # the forge command
 ```
 
 ---
 
-## Test Suite
+## Tests
 
+```bash
+npm test
 ```
-npm test   # 40 tests — policy, executor, verification chain, semantic diff
-```
 
-| Suite | Tests | What it covers |
-|---|---|---|
-| Policy | 13 | deny-by-default, glob rules, hard-deny, requires_approval, normalize |
-| Executor | 8 | valid write/read, path outside glob, expired token, unknown id, op mismatch |
-| Verify | 5 | tsc pass/fail, all stages run on failure, test/lint skip conditions |
-| Diff | 14 | category inference, NodeAdded/Removed grouping, blast-radius computation |
-
----
-
-## MVP Build Order — Complete
-
-- [x] **Step 1** — System Model (`model/`)
-- [x] **Step 2** — Permission Broker (`policy/`)
-- [x] **Step 3** — Capabilities + Executor (`capability/`, `executor/`)
-- [x] **Step 4** — Verification Chain (`verify/chain.ts`)
-- [x] **Step 5** — Semantic Diff (`diff/semantic.ts`)
-- [x] **Step 6** — LLM Integration (`forge change "<goal>"`)
+| Suite | Covers |
+|---|---|
+| Loop | Tool calls and results, deny / ask / approve, cut-off replies, step and budget limits |
+| Check | Path escapes, symlinks, chained commands, git rules, protected files |
+| Tools | read, write, edit, glob, grep, bash, line counting |
+| Usage | Model lookup, status line, cost, budget |
+| Policy | Rule matching, deny-by-default, approval rules |
+| Git | Branch names, protected branches, verification gate |
+| Verify | Stages, skip conditions |
+| Diff | Category grouping, blast radius |
 
 ---
 

@@ -11,6 +11,6 @@
     "declaration": true,
     "sourceMap": true
   },
-  "include": ["model/**/*", "policy/**/*", "capability/**/*", "executor/**/*", "diff/**/*", "verify/**/*", "cli/**/*", "llm/**/*", "demo/**/*"],
+  "include": ["model/**/*", "policy/**/*", "executor/**/*", "diff/**/*", "verify/**/*", "cli/**/*", "agent/**/*", "tools/**/*", "demo/**/*"],
   "exclude": ["node_modules", "dist"]
 }

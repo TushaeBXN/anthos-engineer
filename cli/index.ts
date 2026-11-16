@@ -1,355 +1,94 @@
 #!/usr/bin/env node
+/**
+ * The forge command.
+ *
+ *   forge                 Start a conversation
+ *   forge "<request>"     Do one thing and exit
+ *   forge init            Index the project, for find_dependents
+ *   forge query <name>    Show what depends on a function or module
+ */
 import { glob } from "glob";
-import path from "node:path";
-import readline from "node:readline/promises";
-import { resetDb, getLatestEventId, getEventsSince } from "../model/events.js";
-import { resetGraph, getGraph } from "../model/graph.js";
-import { initFromFiles, localInvalidation, dependencyInvalidation, rebuildGraph } from "../model/incremental.js";
-import { TypeScriptExtractor } from "../model/typescript/ts-extractor.js";
-import { loadPolicy } from "../policy/parser.js";
-import { evaluate } from "../policy/evaluator.js";
-import { issueCapability } from "../capability/issuer.js";
-import { writeFile } from "../executor/filesystem.js";
-import { createBranch, commit, push } from "../executor/git.js";
-import { runVerificationChain, printChainResult } from "../verify/chain.js";
-import type { VerifyGate } from "../verify/chain.js";
-import { computeSemanticDiff, printSemanticDiff } from "../diff/semantic.js";
-import { planChange } from "../llm/planner.js";
-import type { ActionRequest } from "../policy/schema.js";
+import { runTurn } from "../agent/loop.js";
+import { createAgent } from "../agent/start.js";
+import { printStatus, prompt } from "../agent/ui.js";
 
-const BANNER = "Forge by Anthos Intelligence";
-const SEP = "─".repeat(44);
+const HELP = `
+  forge                 Start a conversation
+  forge "<request>"     Do one thing and exit
+  forge init            Index the project
+  forge query <name>    Show what depends on a function or module
 
-function usage(): void {
-  console.log(`\n${BANNER}\n${SEP}`);
-  console.log("Commands:");
-  console.log("  forge init              Index the current repo");
-  console.log("  forge query <nodeId>    Show transitive dependents of a node");
-  console.log("  forge change <goal>     Plan, approve, and execute a change via LLM\n");
+  Choose a model with FORGE_PROVIDER and FORGE_MODEL.
+  Set a spending limit with FORGE_BUDGET_USD.
+`;
+
+/** One request, then exit. */
+async function once(request: string): Promise<void> {
+  const agent = createAgent();
+  await runTurn(request, agent);
+  printStatus(agent.usage);
 }
 
-async function cmdInit(): Promise<void> {
-  console.log(`\n${BANNER}`);
-  console.log(`${SEP}`);
-  console.log("Initializing system model…\n");
+/** A conversation: read a line, run a turn, show the status line, repeat. */
+async function chat(): Promise<void> {
+  const agent = createAgent();
+  console.log("\n  Forge\n");
+  printStatus(agent.usage);
 
-  // Wipe existing state
+  while (true) {
+    const line = await prompt();
+    if (line === null || line.trim() === "exit" || line.trim() === "quit") break;
+    if (line.trim() === "") continue;
+    await runTurn(line, agent);
+    printStatus(agent.usage);
+  }
+}
+
+async function init(): Promise<void> {
+  const { resetDb } = await import("../model/events.js");
+  const { resetGraph, getGraph } = await import("../model/graph.js");
+  const { initFromFiles } = await import("../model/incremental.js");
+  const { TypeScriptExtractor } = await import("../model/typescript/ts-extractor.js");
+
   resetDb();
   resetGraph();
-
-  const extractor = new TypeScriptExtractor();
-
-  // Find all TS files, excluding node_modules, dist, .forge
   const files = await glob("**/*.{ts,tsx,mts,cts}", {
-    cwd: process.cwd(),
     ignore: ["node_modules/**", "dist/**", ".forge/**", "**/*.d.ts"],
-    absolute: false,
   });
-
   if (files.length === 0) {
-    console.log("No TypeScript files found.");
+    console.log("\n  No TypeScript files found.\n");
     return;
   }
 
-  console.log(`Found ${files.length} TypeScript files\n`);
-
-  let processed = 0;
-  const width = 30;
-
-  await initFromFiles(files, extractor, (file, idx, total) => {
-    processed = idx + 1;
-    const pct = Math.round((processed / total) * 100);
-    const filled = Math.round((processed / total) * width);
-    const bar = "█".repeat(filled) + "░".repeat(width - filled);
-    process.stdout.write(`\r  [${bar}] ${pct}% (${processed}/${total})`);
-  });
-
-  process.stdout.write("\n\n");
-
+  await initFromFiles(files, new TypeScriptExtractor());
   const graph = getGraph();
-  const nodes = graph.getNodes();
-  const edges = graph.getEdges();
-
-  const byKind = nodes.reduce(
-    (acc, n) => {
-      acc[n.kind] = (acc[n.kind] ?? 0) + 1;
-      return acc;
-    },
-    {} as Record<string, number>,
-  );
-
-  const byEdgeKind = edges.reduce(
-    (acc, e) => {
-      acc[e.kind] = (acc[e.kind] ?? 0) + 1;
-      return acc;
-    },
-    {} as Record<string, number>,
-  );
-
-  console.log(`${SEP}`);
-  console.log("SYSTEM MODEL");
-  console.log(`${SEP}`);
-  console.log(`  Nodes: ${nodes.length}`);
-  for (const [kind, count] of Object.entries(byKind)) {
-    console.log(`    ${kind.padEnd(12)} ${count}`);
-  }
-  console.log(`\n  Edges: ${edges.length}`);
-  for (const [kind, count] of Object.entries(byEdgeKind)) {
-    console.log(`    ${kind.padEnd(12)} ${count}`);
-  }
-  console.log(`${SEP}\n`);
-  console.log(`Done. Model written to .forge/events.db\n`);
+  console.log(`\n  Indexed ${files.length} files: ${graph.nodeCount()} functions and modules, ${graph.edgeCount()} links.\n`);
 }
 
-async function cmdQuery(nodeId: string): Promise<void> {
-  // Rebuild graph from disk first
-  const { rebuildGraph } = await import("../model/incremental.js");
-  rebuildGraph();
-
-  const graph = getGraph();
-  const node = graph.getNode(nodeId);
-
-  if (!node) {
-    // Try fuzzy match by name
-    const matches = graph.getNodes().filter(
-      (n) =>
-        n.name === nodeId ||
-        n.id.includes(nodeId) ||
-        n.filePath.includes(nodeId),
-    );
-    if (matches.length === 0) {
-      console.error(`No node found matching: ${nodeId}`);
-      process.exit(1);
-    }
-    if (matches.length === 1) {
-      runQuery(matches[0].id);
-      return;
-    }
-    console.log("Multiple matches:");
-    for (const m of matches) console.log(`  ${m.id}`);
-    return;
-  }
-
-  runQuery(nodeId);
+async function query(name: string): Promise<void> {
+  const { findDependents } = await import("../tools/project.js");
+  const result = await findDependents.run({ name }, process.cwd());
+  console.log(`\n${result.output.replace(/^/gm, "  ")}\n`);
+  if (result.isError) process.exitCode = 1;
 }
 
-function runQuery(nodeId: string): void {
-  const graph = getGraph();
-  const node = graph.getNode(nodeId)!;
-  const dependents = dependencyInvalidation(nodeId);
+async function main(): Promise<void> {
+  const [command, ...rest] = process.argv.slice(2);
 
-  console.log(`\n${BANNER}`);
-  console.log(SEP);
-  console.log(`Node: ${node.name} (${node.kind})`);
-  console.log(`ID:   ${node.id}`);
-  console.log(SEP);
-
-  if (dependents.size === 0) {
-    console.log("No dependents.\n");
-    return;
+  if (command === undefined) return chat();
+  if (command === "help" || command === "--help" || command === "-h") return console.log(HELP);
+  if (command === "init") return init();
+  if (command === "query") {
+    if (rest.length === 0) throw new Error("Usage: forge query <name>");
+    return query(rest.join(" "));
   }
-
-  console.log(`Transitive dependents (${dependents.size}):\n`);
-  for (const depId of dependents) {
-    const depNode = graph.getNode(depId);
-    if (depNode) {
-      console.log(`  ${depNode.kind.padEnd(10)} ${depNode.name}  (${depNode.filePath})`);
-    } else {
-      console.log(`  [unknown]  ${depId}`);
-    }
-  }
-  console.log();
+  // "forge change <request>" is the old spelling of "forge <request>".
+  const request = (command === "change" ? rest : [command, ...rest]).join(" ");
+  if (request === "") throw new Error('Usage: forge "<request>"');
+  return once(request);
 }
 
-async function cmdChange(goal: string): Promise<void> {
-  // 1. Ensure graph is populated
-  rebuildGraph();
-  const graph = getGraph();
-  if (graph.nodeCount() === 0) {
-    console.error("System model is empty — run `forge init` first.");
-    process.exit(1);
-  }
-
-  console.log(`\n${BANNER}`);
-  console.log(SEP);
-  console.log(`Goal: ${goal}\n`);
-
-  // 2. Plan via LLM
-  process.stdout.write("Planning…");
-  let plan;
-  try {
-    plan = await planChange(goal, graph);
-  } catch (err) {
-    process.stdout.write("\n");
-    console.error("Planning failed:", (err as Error).message);
-    process.exit(1);
-  }
-  process.stdout.write(" done.\n\n");
-
-  // 3. Evaluate each operation against policy
-  const policy = loadPolicy();
-  const agentId = "forge-agent";
-  const sessionId = crypto.randomUUID();
-
-  const evaluated = plan.operations.map((op) => {
-    const req: ActionRequest = {
-      resource: "filesystem",
-      operation: "write",
-      target: op.filePath,
-      agentId,
-      sessionId,
-    };
-    const decision = evaluate(req, policy);
-    return { op, req, decision };
-  });
-
-  // 4. Display proposed changes
-  console.log("PROPOSED PLAN");
-  console.log(SEP);
-  console.log(`Rationale: ${plan.rationale}\n`);
-
-  for (const { op, decision } of evaluated) {
-    const icon = decision.decision === "allow" ? "✓" : decision.decision === "requires_approval" ? "?" : "✗";
-    console.log(`  ${icon} ${op.operation.toUpperCase().padEnd(7)} ${op.filePath}`);
-    console.log(`    ${op.rationale}`);
-    console.log(`    Policy: ${decision.decision}`);
-  }
-  console.log();
-
-  // 5. Abort if anything is denied
-  const denied = evaluated.filter((e) => e.decision.decision === "deny");
-  if (denied.length > 0) {
-    console.error(`${denied.length} operation(s) denied by policy:\n`);
-    for (const { op, decision } of denied) {
-      console.error(`  ✗ ${op.filePath} — ${decision.reason}`);
-    }
-    process.exit(1);
-  }
-
-  // 6. User approval
-  console.log(SEP);
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  const answer = await rl.question("Proceed? [y/N] ");
-  rl.close();
-
-  if (answer.trim().toLowerCase() !== "y") {
-    console.log("\nAborted.\n");
-    process.exit(0);
-  }
-
-  // 7. Execute via Capability Executor, collecting events for semantic diff
-  console.log("\nWriting files…");
-  const extractor = new TypeScriptExtractor();
-  const changeEvents: ReturnType<typeof getEventsSince> = [];
-
-  for (const { op, decision } of evaluated) {
-    const cap = issueCapability(decision, 60);
-    const result = await writeFile(cap.id, op.filePath, op.content);
-    if (!result.success) {
-      console.error(`  ✗ ${op.filePath}: ${result.error}`);
-      continue;
-    }
-    console.log(`  ✓ ${op.filePath}`);
-
-    // Re-extract to emit graph events for this file
-    const beforeId = getLatestEventId();
-    try {
-      await localInvalidation(op.filePath, extractor);
-    } catch {
-      // Non-fatal — graph stays consistent, diff may be incomplete
-    }
-    changeEvents.push(...getEventsSince(beforeId));
-  }
-
-  // 8. Verify
-  console.log();
-  const chainResult = await runVerificationChain(process.cwd());
-  printChainResult(chainResult);
-
-  // 9. Semantic diff
-  const diff = computeSemanticDiff(changeEvents, getGraph());
-  printSemanticDiff(diff);
-
-  if (!chainResult.passed) {
-    process.exit(1);
-  }
-
-  // 10. Git: create forge/* branch → commit → optional push
-  const slug = goal
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 48);
-
-  const cwd = process.cwd();
-  const branchResult = await createBranch(slug, agentId, sessionId, cwd);
-  if (!branchResult.success) {
-    console.log(`\nNote: skipping git commit — ${branchResult.error ?? branchResult.stderr}`);
-    return;
-  }
-  console.log(`\nBranch:  ${branchResult.stdout}`);
-
-  const changedPaths = evaluated
-    .filter((e) => e.decision.decision !== "deny")
-    .map((e) => e.op.filePath);
-
-  const gate: VerifyGate = { passed: chainResult.passed, diffHash: chainResult.diffHash };
-  const commitResult = await commit(`feat: ${goal}`, changedPaths, gate, agentId, sessionId, cwd);
-
-  if (!commitResult.success) {
-    console.log(`Commit failed: ${commitResult.stderr}`);
-    return;
-  }
-  console.log(`Commit:  ${commitResult.stdout}`);
-
-  const rl2 = readline.createInterface({ input: process.stdin, output: process.stdout });
-  const pushAnswer = await rl2.question("\nPush to GitHub? [y/N] ");
-  rl2.close();
-
-  if (pushAnswer.trim().toLowerCase() === "y") {
-    const pushResult = await push(true, agentId, sessionId, cwd);
-    if (pushResult.success) {
-      console.log(`Pushed:  ${pushResult.stdout}\n`);
-    } else {
-      console.error(`Push failed: ${pushResult.stderr}\n`);
-    }
-  } else {
-    console.log(`\nBranch ready — run 'git push -u origin ${branchResult.stdout}' when ready.\n`);
-  }
-}
-
-// ── Main ──
-const [, , command, ...args] = process.argv;
-
-if (!command || command === "help" || command === "--help" || command === "-h") {
-  usage();
-} else if (command === "init") {
-  cmdInit().catch((err) => {
-    console.error("Error:", (err as Error).message);
-    process.exit(1);
-  });
-} else if (command === "query") {
-  const nodeId = args.join(" ");
-  if (!nodeId) {
-    console.error("Usage: forge query <nodeId>");
-    process.exit(1);
-  }
-  cmdQuery(nodeId).catch((err) => {
-    console.error("Error:", (err as Error).message);
-    process.exit(1);
-  });
-} else if (command === "change") {
-  const goal = args.join(" ");
-  if (!goal) {
-    console.error('Usage: forge change "<goal>"');
-    process.exit(1);
-  }
-  cmdChange(goal).catch((err) => {
-    console.error("Error:", (err as Error).message);
-    process.exit(1);
-  });
-} else {
-  console.error(`Unknown command: ${command}`);
-  usage();
+main().catch((err) => {
+  console.error(`\n  ${(err as Error).message}\n`);
   process.exit(1);
-}
+});

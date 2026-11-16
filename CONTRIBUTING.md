@@ -47,7 +47,7 @@ Mention what you ran in the pull request description. If you could not run a che
 
 These hold across every change and are not negotiable:
 
-1. **No code path outside `executor/` may touch `fs` or `shell` for agent-driven changes.** Re-validate the capability token before every operation.
+1. **Every tool call goes through `check()` in `agent/loop.ts` before it runs.** Tools do not check policy themselves, and nothing runs a tool except the loop.
 2. **Nothing writes to the materialized graph directly.** Every mutation goes through an event in `events.ts` first.
 3. **Normalization happens once.** `policy/evaluator.ts` normalizes an ActionRequest before matching rules. Don't add per-resource normalization outside this path.
 4. **Verification is mandatory after every change.** `verify/chain.ts` runs `tsc --noEmit → test → lint` even if an earlier stage fails.
