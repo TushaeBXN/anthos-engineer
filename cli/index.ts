@@ -41,7 +41,6 @@ async function chat(): Promise<void> {
     lastText() { return lastText; },
   };
 
-  console.log("\n  Forge  (type /help for commands)\n");
   printStatus(agent.usage);
 
   while (true) {
