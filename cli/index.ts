@@ -10,7 +10,7 @@
 import { glob } from "glob";
 import { runTurn } from "../agent/loop.js";
 import { createAgent } from "../agent/start.js";
-import { printStatus, prompt } from "../agent/ui.js";
+import { printHeader, printStatus, prompt, statusLine } from "../agent/ui.js";
 import { runCommand, type CommandContext } from "./commands.js";
 
 const HELP = `
@@ -41,7 +41,7 @@ async function chat(): Promise<void> {
     lastText() { return lastText; },
   };
 
-  printStatus(agent.usage);
+  printHeader(statusLine(agent.usage));
 
   while (true) {
     const line = await prompt();

@@ -1,11 +1,23 @@
 /**
- * Terminal output for Forge, styled after Claude Code:
+ * Terminal UI for Forge — panel-style layout inspired by Claude Code's Ink UI.
  *
- *   - Model text at full strength, printed as-is.
- *   - Tool calls on their own line, preceded by ⎿ and dimmed.
- *   - A rotating spinner in-place while the model is working.
- *   - One compact status line after each turn.
- *   - No banners, boxes, or decorative borders.
+ * Layout on startup:
+ *
+ *   ╭─────────────────────────────────────────────╮
+ *   │  ▶  FORGE  by Anthos Intelligence            │
+ *   │     claude-opus-5-5 · closed · hosted        │
+ *   ╰─────────────────────────────────────────────╯
+ *
+ * Each turn:
+ *
+ *   ⠹                           ← spinner while working
+ *   ⎿ Read agent/loop.ts        ← tool calls, left-railed
+ *   ⎿ Edit agent/loop.ts  +9 −0
+ *
+ *   The model's answer here.    ← full-strength reply
+ *
+ *   ─────────────────────────────────────────────
+ *   claude-opus-5-5 · 14k used · $0.07 · +9 −0
  */
 import readline from "node:readline/promises";
 import type { UsageTracker } from "./usage.js";
@@ -17,14 +29,17 @@ export interface Screen {
   working(on: boolean): void;
 }
 
-const tty = process.stdout.isTTY;
+// ── Colors ────────────────────────────────────────────────────────────────────
+
+const tty   = process.stdout.isTTY;
 const color = tty && !process.env["NO_COLOR"];
 
-const dim    = (s: string) => color ? `\x1b[2m${s}\x1b[0m`  : s;
-const bold   = (s: string) => color ? `\x1b[1m${s}\x1b[0m`  : s;
-const red    = (s: string) => color ? `\x1b[31m${s}\x1b[0m` : s;
-const accent = (s: string) => color ? `\x1b[36m${s}\x1b[0m` : s;
-const green  = (s: string) => color ? `\x1b[32m${s}\x1b[0m` : s;
+const dim    = (s: string) => color ? `\x1b[2m${s}\x1b[0m`     : s;
+const bold   = (s: string) => color ? `\x1b[1m${s}\x1b[0m`     : s;
+const red    = (s: string) => color ? `\x1b[31m${s}\x1b[0m`    : s;
+const accent = (s: string) => color ? `\x1b[36m${s}\x1b[0m`    : s;
+const green  = (s: string) => color ? `\x1b[32m${s}\x1b[0m`    : s;
+const white  = (s: string) => color ? `\x1b[97m${s}\x1b[0m`    : s;
 
 // ── Spinner ───────────────────────────────────────────────────────────────────
 
@@ -36,7 +51,7 @@ function startSpinner(): void {
   if (!tty || spinnerTimer) return;
   spinnerFrame = 0;
   spinnerTimer = setInterval(() => {
-    process.stdout.write(`\r${dim(FRAMES[spinnerFrame % FRAMES.length]!)} `);
+    process.stdout.write(`\r${accent(FRAMES[spinnerFrame % FRAMES.length]!)} `);
     spinnerFrame++;
   }, 80);
 }
@@ -45,7 +60,36 @@ function stopSpinner(): void {
   if (!spinnerTimer) return;
   clearInterval(spinnerTimer);
   spinnerTimer = null;
-  if (tty) process.stdout.write("\r\x1b[K"); // clear the spinner line
+  if (tty) process.stdout.write("\r\x1b[K");
+}
+
+// ── Header panel ──────────────────────────────────────────────────────────────
+
+/**
+ * Printed once at startup.
+ *
+ *   ╭─────────────────────────────────────────────╮
+ *   │  ▶  FORGE  by Anthos Intelligence            │
+ *   │     claude-opus-5-5 · closed · hosted        │
+ *   ╰─────────────────────────────────────────────╯
+ */
+export function printHeader(statusLine: string): void {
+  const cols = tty ? (process.stdout.columns ?? 60) : 60;
+  const width = Math.min(cols - 2, 72);
+  const inner = width - 2; // inside the border
+
+  const title  = `▶  FORGE  by Anthos Intelligence`;
+  const sub    = statusLine;
+
+  const pad = (s: string) => s.padEnd(inner);
+  const rule = "─".repeat(width);
+
+  console.log("");
+  console.log(dim(`╭${rule}╮`));
+  console.log(dim("│ ") + bold(white(pad(title))) + dim(" │"));
+  console.log(dim("│ ") + dim(pad(sub))           + dim(" │"));
+  console.log(dim(`╰${rule}╯`));
+  console.log("");
 }
 
 // ── Screen ────────────────────────────────────────────────────────────────────
@@ -57,10 +101,11 @@ export const terminal: Screen = {
 
   activity(label, detail, failed) {
     // ⎿ Read agent/loop.ts   +9 −0
-    // ⎿ bash npm test         failed
-    const hook = dim("⎿ ");
-    const body = failed ? `${label}  ${red(detail ?? "failed")}` : detail ? `${label}  ${dim(detail)}` : label;
-    console.log(dim(hook) + dim(body));
+    const hook = "⎿ ";
+    const tail = detail
+      ? (failed ? `  ${red(detail)}` : `  ${dim(detail)}`)
+      : "";
+    console.log(dim(hook + label) + tail);
   },
 
   note(text) {
@@ -75,12 +120,18 @@ export const terminal: Screen = {
 
 // ── Status line ───────────────────────────────────────────────────────────────
 
+/** Printed after every turn, preceded by a thin rule. */
 export function printStatus(usage: UsageTracker): void {
-  const parts = usage.statusParts();
-  // First part is model info — slightly brighter; rest are dim metadata.
-  const [model, ...rest] = parts;
-  const line = [dim(model ?? ""), ...rest.map(dim)].join(dim("  ·  "));
-  console.log(line + "\n");
+  const cols = tty ? (process.stdout.columns ?? 60) : 60;
+  const rule = dim("─".repeat(Math.min(cols, 74)));
+  const line = usage.statusParts().join(dim("  ·  "));
+  console.log(rule);
+  console.log(dim(line) + "\n");
+}
+
+/** The plain status string (for the header). */
+export function statusLine(usage: UsageTracker): string {
+  return usage.statusParts().join("  ·  ");
 }
 
 // ── Prompts ───────────────────────────────────────────────────────────────────
@@ -88,8 +139,8 @@ export function printStatus(usage: UsageTracker): void {
 export async function confirm(question: string): Promise<"yes" | "no" | "always"> {
   if (!process.stdin.isTTY) return "no";
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  // Claude Code style: the question is in the accent color, options are dim.
-  const answer = (await rl.question(`${accent("?")} ${bold(question)}  ${dim("y · n · a(lways)")}\n${accent("›")} `)).trim().toLowerCase();
+  const q  = `\n${accent("?")} ${bold(question)}  ${dim("y · n · a(lways)")}\n${green(">")} `;
+  const answer = (await rl.question(q)).trim().toLowerCase();
   rl.close();
   if (answer === "a" || answer === "always") return "always";
   return answer === "y" || answer === "yes" ? "yes" : "no";
