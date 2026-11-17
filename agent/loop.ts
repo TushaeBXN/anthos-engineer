@@ -13,6 +13,7 @@ import type { ForgePolicy, PolicyDecisionRecord } from "../policy/schema.js";
 import type { Session, Tool, ToolCall, ToolResult } from "./types.js";
 import type { Screen } from "./ui.js";
 import type { UsageTracker } from "./usage.js";
+import { telemetry } from "./telemetry.js";
 
 /** Tool output beyond this is cut, so one huge result cannot fill the context. */
 const MAX_OUTPUT_CHARS = 30_000;
@@ -113,6 +114,7 @@ async function runTool(call: ToolCall, agent: Agent): Promise<ToolResult> {
 
   if (verdict.decision === "deny") {
     agent.screen.activity(label, "not allowed", true);
+    telemetry.record(call.name, false, 0, "denied by policy");
     return failed(call, `Not allowed by policy: ${verdict.reason}. Do not retry; find another way or tell the user.`);
   }
   if (verdict.decision === "ask") {
@@ -120,17 +122,28 @@ async function runTool(call: ToolCall, agent: Agent): Promise<ToolResult> {
     agent.audit(humanDecision(access, approved, agent.who));
     if (!approved) {
       agent.screen.activity(label, "declined", true);
+      telemetry.record(call.name, false, 0, "declined by user");
       return failed(call, "The user declined this action. Ask them how they would like to proceed.");
     }
   }
 
+  // Circuit breaker: if this tool has failed too many times in a row, stop trying.
+  if (telemetry.isTripped(call.name)) {
+    agent.screen.activity(label, "circuit tripped", true);
+    return failed(call, `Tool "${call.name}" has failed repeatedly. Try a different approach.`);
+  }
+
+  const t0 = Date.now();
   try {
     const result = await tool.run(call.input, agent.cwd);
+    const durationMs = Date.now() - t0;
+    telemetry.record(call.name, !result.isError, durationMs, result.isError ? result.output : undefined);
     if (result.lines) agent.usage.addLines(result.lines.file, result.lines.added, result.lines.removed);
     const detail = result.isError ? "failed" : result.lines ? `+${result.lines.added} −${result.lines.removed}` : undefined;
     agent.screen.activity(label, detail, result.isError);
     return { id: call.id, output: shorten(result.output), isError: result.isError ?? false };
   } catch (err) {
+    telemetry.record(call.name, false, Date.now() - t0, (err as Error).message);
     agent.screen.activity(label, "failed", true);
     return failed(call, (err as Error).message);
   }

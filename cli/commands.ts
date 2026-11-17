@@ -287,6 +287,14 @@ cmd("audit", {
   },
 });
 
+cmd("telemetry", {
+  description: "Show tool call stats for this session.",
+  async run() {
+    const { telemetry } = await import("../agent/telemetry.js");
+    console.log(telemetry.summary());
+  },
+});
+
 // ── Output ────────────────────────────────────────────────────────────────────
 
 cmd("copy", {
