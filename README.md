@@ -249,6 +249,8 @@ Forge is one loop:
 - Policy check before every tool — allow / ask / deny
 - Parallel reads, sequential writes
 - File undo (`/undo`) — every write snapshotted before it happens
+- Tool telemetry — logs every call to `.forge/telemetry.ndjson`; `/telemetry` shows session stats
+- Circuit breaker — blocks a tool after 3 consecutive failures so the model can't thrash
 - 20 slash commands
 - Persistent config via `~/.forgerc` — no env vars every session
 - Claude Code-style terminal UI (panel header, braille spinner, `⎿` hooks)
@@ -302,6 +304,24 @@ Every policy decision is logged to `.forge/audit.db`. Use `/audit` to review rec
 
 ---
 
+## Telemetry and circuit breaker
+
+Every tool call is recorded to `.forge/telemetry.ndjson` with the tool name, success or failure, duration, and any error message. Use `/telemetry` inside a conversation to see a live summary:
+
+```
+  Tool telemetry — 12 calls, 83% success
+  ────────────────────────────────────────────────────────────
+  read                    8 calls   100% ok    42ms avg
+  bash                    3 calls    67% ok   180ms avg
+  write                   1 calls   100% ok    12ms avg
+```
+
+The circuit breaker watches each tool across the session. After **3 consecutive failures** of the same tool, it trips — the tool is blocked for the rest of the session and the model gets a clear message to try a different approach. This prevents the model from retrying the same broken call in a loop.
+
+The breaker resets on the first success, and trips per tool name (not per exact arguments), so one bad file path doesn't block all reads.
+
+---
+
 ## Project structure
 
 ```
@@ -313,6 +333,7 @@ agent/
 ├── usage.ts             # token, cost and line counts; status line
 ├── ui.ts                # terminal output: panel header, spinner, ⎿ hooks, prompt
 ├── undo.ts              # file snapshot stack for /undo
+├── telemetry.ts         # per-tool call logging and circuit breaker
 └── providers/
     ├── anthropic.ts     # Claude via Anthropic SDK
     └── openai.ts        # OpenAI-compatible APIs (Ollama, LM Studio, Groq, Together)
