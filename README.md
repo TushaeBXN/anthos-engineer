@@ -86,6 +86,8 @@ The answer Forge is built around is a permission layer that runs before every si
 
 That's a lot of safety machinery for a coding agent. It's intentional.
 
+**The cost angle matters too.** Most hosted coding agents charge per token. Run Forge on a local model and the marginal cost of an hour of agentic work is zero — no API bill, no usage cap, no "you've hit your limit for today." For heavy use — running an agent across a large codebase, iterating on a long-running task, or just leaving it running overnight — that's not a minor concern. The local-first path isn't only about trust or privacy; it's about economics.
+
 **Why it matters:** A model that hallucinates a shell command shouldn't be able to run it silently. A write to a path outside your project shouldn't be able to sneak through via a symlink. A chained command like `npm test && git push origin main` shouldn't bypass a push rule just because the first part is allowed. Forge checks all of these.
 
 **What I'd do to make it better:**
