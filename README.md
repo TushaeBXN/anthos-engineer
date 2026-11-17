@@ -221,6 +221,29 @@ Forge is one loop:
 
 ---
 
+## What works, what doesn't
+
+**Working well:**
+- Proper agent loop — model → tools → model → repeat, not one-shot
+- Tool calling actually executes (reads files, writes, runs bash)
+- Policy check before every tool — allow / ask / deny
+- Parallel reads, sequential writes
+- File undo (`/undo`) — every write snapshotted before it happens
+- 20 slash commands
+- Persistent config via `~/.forgerc` — no env vars every session
+- Claude Code-style terminal UI (panel header, braille spinner, `⎿` hooks)
+- Works with local models for free, no API key needed
+
+**Current limitations vs Claude Code:**
+- Local models are capable but less reliable — may try several wrong commands before getting it right
+- No streaming output — you wait for the full response before seeing anything
+- No context compaction — long sessions will eventually hit the model's context limit
+- No MCP, no IDE integration, no subagents
+- The 32k context wrapper (`num_ctx` Modelfile) is a manual workaround, not built-in
+- Policy rules are the only thing protecting your filesystem — no sandbox isolation yet (planned for v2)
+
+---
+
 ## Permissions
 
 Before any tool runs, `policy/check.ts` gives one of three answers.
