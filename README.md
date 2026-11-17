@@ -76,6 +76,26 @@ Then run `forge` from any directory.
 
 ---
 
+## Why this exists
+
+Coding agents are powerful, but most of them make a trade you don't control: your code gets sent to a server, a closed model you can't inspect makes decisions about your files, and when it runs a shell command it has the same access to your machine that you do — with nothing between the model's output and your filesystem except the agent's own judgment.
+
+The problem I wanted to solve was: **how do you give an AI agent real coding capability without giving it unchecked access to everything?**
+
+The answer Forge is built around is a permission layer that runs before every single tool call — not just dangerous ones. Every read, every write, every shell command goes through `policy/check.ts` first. You write rules in a YAML file you own. If no rule covers something, Forge asks you. If you're not at the keyboard, it refuses. Every decision is logged.
+
+That's a lot of safety machinery for a coding agent. It's intentional.
+
+**Why it matters:** A model that hallucinates a shell command shouldn't be able to run it silently. A write to a path outside your project shouldn't be able to sneak through via a symlink. A chained command like `npm test && git push origin main` shouldn't bypass a push rule just because the first part is allowed. Forge checks all of these.
+
+**What I'd do to make it better:**
+
+The biggest remaining gap is that the shell check reads command text — it is not a sandbox. A command you approve can do anything your user account can. The right fix is to run each session in an isolated container, the way tools like [Cloudroom](https://github.com/davidondrej/cloudroom) do: the model works inside a VM, sees a copy of your project, and changes only come back to your machine after you review a diff. That's the v2 target.
+
+Beyond that: streaming output so you see the model think in real time, context compaction so long sessions don't hit the token limit, and tighter tool-calling support for more local models.
+
+---
+
 ## What it looks like
 
 ```
