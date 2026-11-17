@@ -19,12 +19,20 @@ Requires Node.js 22+ and either [Ollama](https://ollama.com) (free, local) or an
 ### Local model — free, runs on your machine
 
 ```bash
-# 1. Pull a model once (~9 GB — good quality, works well for coding)
-ollama pull hf.co/bartowski/Qwen2.5-Coder-14B-Instruct-abliterated-GGUF:Q4_K_M
+# 1. Pull the model once (~7.6 GB)
+ollama pull hf.co/mradermacher/DeepSeek-V4-Pro-Qwen3.5-9B-UNCENSORED-heretic-i1-GGUF:i1-Q6_K
 ```
 
 ```bash
-# 2. Clone and install
+# 2. Create it with a larger context window (required — default 4k is too small)
+echo 'FROM hf.co/mradermacher/DeepSeek-V4-Pro-Qwen3.5-9B-UNCENSORED-heretic-i1-GGUF:i1-Q6_K
+PARAMETER num_ctx 32768' > /tmp/Modelfile
+
+ollama create forge-deepseek -f /tmp/Modelfile
+```
+
+```bash
+# 3. Clone and install
 git clone https://github.com/TushaeBXN/anthos-engineer.git
 cd anthos-engineer
 npm install
@@ -33,13 +41,13 @@ npm rebuild better-sqlite3
 ```
 
 ```bash
-# 3. Save your model settings once — survives terminal restarts
+# 4. Save your model settings once — survives terminal restarts
 npx tsx cli/index.ts config set provider ollama
-npx tsx cli/index.ts config set model hf.co/bartowski/Qwen2.5-Coder-14B-Instruct-abliterated-GGUF:Q4_K_M
+npx tsx cli/index.ts config set model forge-deepseek
 ```
 
 ```bash
-# 4. Run from any terminal
+# 5. Run from any terminal
 cd anthos-engineer && npx tsx cli/index.ts
 ```
 
@@ -182,12 +190,16 @@ forge config get
 | Together AI | `together` | open | hosted | `OPENAI_API_KEY`, `FORGE_MODEL` |
 | Any OpenAI-compatible | any name | unknown | hosted | `FORGE_BASE_URL`, `FORGE_MODEL` |
 
-**Recommended local models** (via Ollama):
+**Recommended local model** (via Ollama):
 
-| Model | Size | Good for |
+| Model | Size | Notes |
 |---|---|---|
-| `hf.co/bartowski/Qwen2.5-Coder-14B-Instruct-abliterated-GGUF:Q4_K_M` | ~9 GB | Best local coding quality |
-| `llama3.1` | ~4.7 GB | General tasks, faster |
+| `forge-deepseek` (see quickstart) | ~7.6 GB | DeepSeek-V4-Pro-Qwen3.5-9B, needs 32k context wrapper |
+| `llama3.1` | ~4.7 GB | Smaller, native tool calling, general tasks |
+
+> **Important:** Not all GGUF models support Ollama's tool-calling protocol. If Forge prints raw JSON instead of executing tools, the model doesn't support tool calling. Use `forge-deepseek` or `llama3.1` to avoid this.
+>
+> Always create local models with `num_ctx 32768` via a Modelfile — the default 4096 token context is too small for real coding tasks.
 
 The model must support tool calling.
 
