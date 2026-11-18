@@ -15,6 +15,28 @@ import type { Screen } from "./ui.js";
 import type { UsageTracker } from "./usage.js";
 import { telemetry } from "./telemetry.js";
 
+const ENGRAM_BASE = "http://127.0.0.1:7742";
+
+/** Pull relevant memories from Engram before the first model call. Silent if offline. */
+async function autoRecall(message: string): Promise<string | null> {
+  try {
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(), 3_000);
+    const res = await fetch(`${ENGRAM_BASE}/v1/tools/engram_recall`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message, n_results: 3 }),
+      signal: controller.signal,
+    });
+    if (!res.ok) return null;
+    const data = await res.json() as Record<string, unknown>;
+    const content = typeof data.content === "string" ? data.content.trim() : null;
+    return content && content.length > 10 ? content : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Tool output beyond this is cut, so one huge result cannot fill the context. */
 const MAX_OUTPUT_CHARS = 30_000;
 
@@ -36,7 +58,11 @@ export interface Agent {
 
 /** Run one turn: from the person's message to the model's final answer. */
 export async function runTurn(message: string, agent: Agent): Promise<string> {
-  let input: string | ToolResult[] = message;
+  // Prepend relevant memories from Engram if available.
+  const memories = await autoRecall(message);
+  let input: string | ToolResult[] = memories
+    ? `[Relevant memories from past sessions]\n${memories}\n\n[User message]\n${message}`
+    : message;
 
   for (let step = 0; step < (agent.maxSteps ?? 50); step++) {
     if (agent.usage.overBudget) {
