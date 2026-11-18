@@ -170,6 +170,7 @@ Type any of these at the `>` prompt:
 | `/audit` | Show recent policy decisions |
 | `/copy` | Copy last response to clipboard |
 | `/save [file]` | Save last response to a file |
+| `/agents` | List the sub-agent types |
 | `/repomap [tokens]` | Show the project map the model sees |
 | `/telemetry` | Show tool call stats for this session |
 | `/help` | Show all commands |
@@ -283,7 +284,8 @@ Forge is one loop:
 - Web search and fetch — `web_search` (DuckDuckGo, no API key) and `web_fetch` (pages as readable markdown); network access goes through the policy like everything else
 - Repo map — a ranked outline of the project in the model's instructions, so it knows where things live before reading anything
 - VS Code extension — Forge in the terminal panel, plus "Ask About Selection" from the editor
-- 22 slash commands
+- Sub-agents — the `task` tool hands a job to a child agent with its own context; same policy, shared budget
+- 23 slash commands
 - Persistent config via `~/.forgerc` — no env vars every session
 - Claude Code-style terminal UI (panel header, braille spinner, `⎿` hooks)
 - 13 providers: Anthropic, OpenAI, Gemini, xAI, Mistral, DeepSeek, OpenRouter, Groq, Together, Fireworks, Cerebras, Ollama, LM Studio — plus any OpenAI-compatible server
@@ -293,7 +295,7 @@ Forge is one loop:
 - Local models are capable but less reliable — may try several wrong commands before getting it right
 - No streaming output — you wait for the full response before seeing anything
 - No context compaction — long sessions will eventually hit the model's context limit
-- No MCP, no subagents
+- No MCP
 - The 32k context wrapper (`num_ctx` Modelfile) is a manual workaround, not built-in
 - Policy rules are the only thing protecting your filesystem — no sandbox isolation yet (planned for v2)
 
@@ -380,6 +382,41 @@ If you'd rather not link the command, set **Forge: Command** in VS Code's settin
 
 ---
 
+## Sub-agents
+
+The `task` tool lets Forge hand a self-contained job to a sub-agent: "find every place we parse dates", "review this diff", "work out why this test fails". The sub-agent works with its own conversation and sends back only its final report, so the main conversation stays short. Several tasks in one reply run at the same time.
+
+What stays the same inside a sub-agent:
+
+- **The same policy.** Every tool call a sub-agent makes goes through `check()`, and is recorded in the audit log under its own name (for example `forge/explore`).
+- **Approvals still come to you**, one question at a time even when sub-agents run in parallel.
+- **One budget.** Sub-agents' tokens and cost count toward the status line and `FORGE_BUDGET_USD`.
+- **No nesting.** A sub-agent cannot start sub-agents of its own.
+
+Built-in types:
+
+| Agent | Tools | Use it for |
+|---|---|---|
+| `general` | all | Any multi-step job |
+| `explore` | read, glob, grep, find_dependents, web_search, web_fetch, recall | Finding code and answering questions — it cannot change files or run commands |
+
+Add your own as markdown files in `.forge/agents/` (Forge never writes to `.forge/`, so the model can't create or change these itself):
+
+```markdown
+---
+name: reviewer
+description: Reviews a change for bugs and missing tests
+tools: read, grep, glob, bash
+maxSteps: 15
+---
+Read the changed files and their callers. Report bugs with file and line,
+most serious first. Do not edit anything.
+```
+
+`tools` limits what the agent can use (leave it out for all tools), `maxSteps` caps how long it works (default 30), and `model` picks a different model on the same provider. `/agents` lists every type.
+
+---
+
 ## Repo map
 
 When Forge starts, it builds a short map of the project and puts it in the model's instructions. The model knows which files matter and what they define before it reads anything, which saves tool calls and context — especially on local models.
@@ -458,6 +495,7 @@ agent/
 ├── undo.ts              # file snapshot stack for /undo
 ├── telemetry.ts         # per-tool call logging and circuit breaker
 ├── repomap.ts           # ranked project outline for the system prompt
+├── subagents.ts         # the task tool, agent types, .forge/agents loader
 └── providers/
     ├── anthropic.ts     # Claude via Anthropic SDK
     └── openai.ts        # OpenAI-compatible APIs (Ollama, LM Studio, Groq, Together)
@@ -481,7 +519,7 @@ vscode-extension/       # VS Code: Forge in the terminal panel, ask about a sele
 
 cli/
 ├── index.ts             # the forge command + forge config set/get
-└── commands.ts          # 22 slash commands
+└── commands.ts          # 23 slash commands
 
 model/                   # dependency index (.forge/events.db)
 verify/chain.ts          # type check → tests → lint

@@ -53,6 +53,11 @@ export class UsageTracker {
     return this.budgetUsd !== null && this.costUsd !== null && this.costUsd >= this.budgetUsd;
   }
 
+  /** A tracker for a sub-agent: its tokens, cost, lines and budget count here; this conversation's context size doesn't change. */
+  child(): UsageTracker {
+    return new ChildUsage(this);
+  }
+
   /** Paths of the files the agent has changed. */
   get changedFiles(): string[] {
     return [...this.files.keys()];
@@ -113,4 +118,26 @@ function trim(n: number): string {
 
 function dollars(n: number): string {
   return `$${n.toFixed(2)}`;
+}
+
+class ChildUsage extends UsageTracker {
+  constructor(private readonly parent: UsageTracker) {
+    super(parent.model, parent.budgetUsd);
+  }
+
+  override addReply(usage: Usage): void {
+    super.addReply(usage);
+    this.parent.inputTokens += usage.inputTokens;
+    this.parent.cachedTokens += usage.cachedTokens;
+    this.parent.outputTokens += usage.outputTokens;
+  }
+
+  override addLines(file: string, added: number, removed: number): void {
+    super.addLines(file, added, removed);
+    this.parent.addLines(file, added, removed);
+  }
+
+  override get overBudget(): boolean {
+    return this.parent.overBudget;
+  }
 }

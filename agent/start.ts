@@ -10,6 +10,7 @@ import { UndoStack } from "./undo.js";
 import type { Agent } from "./loop.js";
 import { repoMapBudget, resolveModel, type ModelInfo } from "./models.js";
 import { buildRepoMap } from "./repomap.js";
+import { loadAgentTypes, makeTaskTool } from "./subagents.js";
 import { anthropicSession } from "./providers/anthropic.js";
 import { openaiSession } from "./providers/openai.js";
 import type { Session, ToolSpec } from "./types.js";
@@ -38,9 +39,22 @@ export function createAgent(cwd = process.cwd()): CreatedAgent {
   const alwaysAllowed = new Set<string>();
   const undo = new UndoStack();
   const tools = makeTools(undo);
+  const system = systemPrompt(cwd);
+  // Sub-agents can run in parallel; their approval questions still go to the person one at a time.
+  let approvals: Promise<unknown> = Promise.resolve();
 
-  return {
-    session: createSession(model, systemPrompt(cwd), tools),
+  let agent: CreatedAgent;
+  tools.push(
+    makeTaskTool({
+      parent: () => agent,
+      newSession: (prompt, specs, name) => createSession(name ? { ...model, model: name } : model, prompt, specs),
+      basePrompt: system,
+      types: loadAgentTypes(cwd),
+    }),
+  );
+
+  agent = {
+    session: createSession(model, system, tools),
     tools,
     undo,
     policy: loadPolicy(path.join(cwd, "forge.policy.yaml")),
@@ -49,12 +63,16 @@ export function createAgent(cwd = process.cwd()): CreatedAgent {
     who: { agentId: "forge", sessionId: crypto.randomUUID() },
     cwd,
     interactive: Boolean(process.stdin.isTTY),
-    async approve(label, _reason, access) {
-      const kind = approvalKind(access);
-      if (alwaysAllowed.has(kind)) return true;
-      const answer = await confirm(`${label}?`);
-      if (answer === "always") alwaysAllowed.add(kind);
-      return answer !== "no";
+    approve(label, _reason, access) {
+      const ask = approvals.then(async () => {
+        const kind = approvalKind(access);
+        if (alwaysAllowed.has(kind)) return true;
+        const answer = await confirm(`${label}?`);
+        if (answer === "always") alwaysAllowed.add(kind);
+        return answer !== "no";
+      });
+      approvals = ask.catch(() => {});
+      return ask;
     },
     audit(record) {
       try {
@@ -64,6 +82,7 @@ export function createAgent(cwd = process.cwd()): CreatedAgent {
       }
     },
   };
+  return agent;
 }
 
 function createSession(model: ModelInfo, system: string, specs: ToolSpec[]): Session {

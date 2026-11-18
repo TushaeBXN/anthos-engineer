@@ -8,7 +8,7 @@
  *   History    /history /undo /files /diff
  *   Project    /init /query /tools /policy /audit
  *   Output     /copy /save /help
- *   Insight    /repomap /telemetry
+ *   Insight    /agents /repomap /telemetry
  */
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -285,6 +285,20 @@ cmd("audit", {
       console.log(`  ${mark} ${r.resource} ${r.operation} ${r.target}  — ${r.reason}`);
     }
     console.log("");
+  },
+});
+
+cmd("agents", {
+  description: "List the sub-agent types the task tool can use.",
+  async run(_args, ctx) {
+    const { loadAgentTypes } = await import("../agent/subagents.js");
+    console.log("");
+    for (const t of loadAgentTypes(ctx.agent.cwd)) {
+      const tools = t.tools ? t.tools.join(", ") : "all tools";
+      console.log(`  ${t.name.padEnd(12)} ${t.description}`);
+      console.log(`  ${"".padEnd(12)} ${tools} · up to ${t.maxSteps} steps · ${t.source}`);
+    }
+    console.log("\n  Add your own as markdown files in .forge/agents/.\n");
   },
 });
 
