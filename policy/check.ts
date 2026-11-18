@@ -30,7 +30,7 @@ export interface Verdict {
 }
 
 /** Turn the person's answer to an "ask" into a record for the audit log. */
-export function humanDecision(access: Access, approved: boolean, who: Who): PolicyDecisionRecord {
+export function humanDecision(access: Access, approved: boolean, who: Who, reason?: string): PolicyDecisionRecord {
   const request: ActionRequest =
     access.kind === "shell" ? { resource: "shell", operation: access.command, target: "*", ...who }
     : access.kind === "network" ? { resource: "network", operation: access.operation, target: access.target, ...who }
@@ -39,7 +39,7 @@ export function humanDecision(access: Access, approved: boolean, who: Who): Poli
     request,
     decision: approved ? "allow" : "deny",
     matchedRuleId: null,
-    reason: approved ? "Approved by the user" : "Declined by the user",
+    reason: reason ?? (approved ? "Approved by the user" : "Declined by the user"),
     timestamp: new Date().toISOString(),
   };
 }

@@ -154,6 +154,18 @@ describe("runTurn", () => {
     assert.deepEqual(audited, ["echo hi:allow:Approved by the user"]);
   });
 
+  test("with no one at the keyboard, an ask is refused without asking and audited as such", async () => {
+    const audited: string[] = [];
+    const { session, received } = script([wants(call("1", "write", { path: "docs/a.md", content: "x" })), says("ok")]);
+    const a = agent(session, { interactive: false, audit: (r) => audited.push(`${r.decision}:${r.reason}`) });
+    await runTurn("go", a);
+
+    assert.deepEqual(a.asked, [], "approve() is never called");
+    assert.equal(fs.existsSync(path.join(a.cwd, "docs/a.md")), false);
+    assert.deepEqual(audited, ["deny:Refused: no one was there to approve it"]);
+    assert.match((received[1] as ToolResult[])[0].output, /no one is available/);
+  });
+
   test("several tool calls in one reply each get a result, in order", async () => {
     const { session, received } = script([
       wants(

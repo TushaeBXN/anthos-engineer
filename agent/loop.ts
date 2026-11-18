@@ -50,6 +50,8 @@ export interface Agent {
   cwd: string;
   /** Ask the person whether a tool call may run. Called only when the policy says "ask". */
   approve(label: string, reason: string, access: Access): Promise<boolean>;
+  /** False when nobody is at the keyboard: every "ask" is refused without asking. Default true. */
+  interactive?: boolean;
   /** Write policy decisions to the audit log. */
   audit(record: PolicyDecisionRecord): void;
   /** Stop after this many model requests in one turn (default 50). */
@@ -141,7 +143,21 @@ async function runTool(call: ToolCall, agent: Agent): Promise<ToolResult> {
   if (verdict.decision === "deny") {
     agent.screen.activity(label, "not allowed", true);
     telemetry.record(call.name, false, 0, "denied by policy");
-    return failed(call, `Not allowed by policy: ${verdict.reason}. Do not retry; find another way or tell the user.`);
+    return failed(
+      call,
+      `Not allowed by policy: ${verdict.reason}. Do not retry or work around it with another tool or address. ` +
+        "Tell the user it was blocked, and do not answer as if it had run.",
+    );
+  }
+  if (verdict.decision === "ask" && agent.interactive === false) {
+    agent.audit(humanDecision(access, false, agent.who, "Refused: no one was there to approve it"));
+    agent.screen.activity(label, "needs approval, no one to ask", true);
+    telemetry.record(call.name, false, 0, "unattended");
+    return failed(
+      call,
+      `This needs the user's approval (${verdict.reason}), and no one is available to give it, so it was not run. ` +
+        "Do not try to get around this with a different tool or address; say what you could not do.",
+    );
   }
   if (verdict.decision === "ask") {
     const approved = await agent.approve(label, verdict.reason, access);

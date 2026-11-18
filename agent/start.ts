@@ -47,6 +47,7 @@ export function createAgent(cwd = process.cwd()): CreatedAgent {
     screen: terminal,
     who: { agentId: "forge", sessionId: crypto.randomUUID() },
     cwd,
+    interactive: Boolean(process.stdin.isTTY),
     async approve(label, _reason, access) {
       const kind = approvalKind(access);
       if (alwaysAllowed.has(kind)) return true;
