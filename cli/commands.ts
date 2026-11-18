@@ -1,13 +1,14 @@
 /**
  * Slash commands for the Forge REPL.
  *
- * Top 20 most useful, grouped by what they do:
+ * Grouped by what they do:
  *
  *   Session    /clear /compact /exit
  *   Status     /status /cost /model /provider /budget
  *   History    /history /undo /files /diff
  *   Project    /init /query /tools /policy /audit
  *   Output     /copy /save /help
+ *   Insight    /repomap /telemetry
  */
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -284,6 +285,22 @@ cmd("audit", {
       console.log(`  ${mark} ${r.resource} ${r.operation} ${r.target}  — ${r.reason}`);
     }
     console.log("");
+  },
+});
+
+cmd("repomap", {
+  description: "Show the project map the model sees in its instructions.",
+  usage: "/repomap [tokens]",
+  async run(args, ctx) {
+    const { buildRepoMap } = await import("../agent/repomap.js");
+    const { repoMapBudget } = await import("../agent/models.js");
+    const budget = Number(args.trim()) || repoMapBudget() || 1024;
+    const map = buildRepoMap(ctx.agent.cwd, budget);
+    if (!map.text) {
+      console.log("\n  No source files found to map.\n");
+      return;
+    }
+    console.log(`\n${map.text.replace(/^/gm, "  ")}\n\n  ${map.shown} of ${map.files} files in ${budget} tokens.\n`);
   },
 });
 

@@ -22,7 +22,7 @@ const HELP = `
   forge config set <key> <val>   Save a setting to ~/.forgerc
   forge config get               Show the current ~/.forgerc
 
-  Keys: provider  model  baseUrl  budget  context  priceInput  priceOutput
+  Keys: provider  model  baseUrl  budget  context  priceInput  priceOutput  repoMap
   Example: forge config set provider ollama
            forge config set model hf.co/bartowski/Qwen2.5-Coder-14B-Instruct-abliterated-GGUF:Q4_K_M
 `;
@@ -113,7 +113,7 @@ async function main(): Promise<void> {
     if (sub === "set") {
       if (!key || vals.length === 0) throw new Error("Usage: forge config set <key> <value>");
       const val = vals.join(" ");
-      const numKeys = new Set(["budget", "context", "priceInput", "priceOutput"]);
+      const numKeys = new Set(["budget", "context", "priceInput", "priceOutput", "repoMap"]);
       writeRc({ [key]: numKeys.has(key) ? Number(val) : val });
       console.log(`\n  Saved ${key}=${val} to ${RC_PATH}\n`);
       return;

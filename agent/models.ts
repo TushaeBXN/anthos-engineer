@@ -65,6 +65,8 @@ interface ForgeRc {
   context?: number;
   priceInput?: number;
   priceOutput?: number;
+  /** Token budget for the repo map in the system prompt. 0 turns it off. */
+  repoMap?: number;
 }
 
 const RC_PATH = process.env["FORGE_RC"] ?? path.join(os.homedir(), ".forgerc");
@@ -83,6 +85,11 @@ export function writeRc(updates: Partial<ForgeRc>): void {
 }
 
 export { RC_PATH };
+
+/** How many tokens the repo map may use: FORGE_REPO_MAP, then ~/.forgerc, then 1024. */
+export function repoMapBudget(env: Record<string, string | undefined> = process.env): number {
+  return number(env["FORGE_REPO_MAP"]) ?? readRc().repoMap ?? 1024;
+}
 
 // ── Resolve ───────────────────────────────────────────────────────────────────
 

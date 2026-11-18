@@ -8,7 +8,8 @@ import { loadPolicy } from "../policy/parser.js";
 import { makeTools } from "../tools/index.js";
 import { UndoStack } from "./undo.js";
 import type { Agent } from "./loop.js";
-import { resolveModel, type ModelInfo } from "./models.js";
+import { repoMapBudget, resolveModel, type ModelInfo } from "./models.js";
+import { buildRepoMap } from "./repomap.js";
 import { anthropicSession } from "./providers/anthropic.js";
 import { openaiSession } from "./providers/openai.js";
 import type { Session, ToolSpec } from "./types.js";
@@ -79,11 +80,17 @@ function approvalKind(access: Access): string {
 }
 
 function systemPrompt(cwd: string): string {
+  let prompt = SYSTEM_PROMPT;
   for (const name of INSTRUCTION_FILES) {
     const file = path.join(cwd, name);
     if (!fs.existsSync(file)) continue;
     const text = fs.readFileSync(file, "utf8").slice(0, 20_000);
-    return `${SYSTEM_PROMPT}\n\nThe project's own instructions (${name}):\n\n${text}`;
+    prompt += `\n\nThe project's own instructions (${name}):\n\n${text}`;
+    break;
   }
-  return SYSTEM_PROMPT;
+  const map = buildRepoMap(cwd, repoMapBudget());
+  if (map.text) {
+    prompt += `\n\nA map of the project: source files, most depended-on first, with the names each defines. Read a file before relying on it.\n\n${map.text}`;
+  }
+  return prompt;
 }

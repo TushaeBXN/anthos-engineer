@@ -169,6 +169,8 @@ Type any of these at the `>` prompt:
 | `/audit` | Show recent policy decisions |
 | `/copy` | Copy last response to clipboard |
 | `/save [file]` | Save last response to a file |
+| `/repomap [tokens]` | Show the project map the model sees |
+| `/telemetry` | Show tool call stats for this session |
 | `/help` | Show all commands |
 
 ---
@@ -197,6 +199,7 @@ forge config get
 | `FORGE_CONTEXT` | Context window size (tokens), for models Forge doesn't know |
 | `FORGE_PRICE_INPUT` | Input price per million tokens |
 | `FORGE_PRICE_OUTPUT` | Output price per million tokens |
+| `FORGE_REPO_MAP` | Token budget for the repo map (default 1024; `0` turns it off). Also `forge config set repoMap <n>` |
 
 ---
 
@@ -255,7 +258,8 @@ Forge is one loop:
 - Circuit breaker — blocks a tool after 3 consecutive failures so the model can't thrash
 - Engram integration — long-term memory across sessions; auto-recall before every turn (optional, local)
 - Web search and fetch — `web_search` (DuckDuckGo, no API key) and `web_fetch` (pages as readable markdown); network access goes through the policy like everything else
-- 20 slash commands
+- Repo map — a ranked outline of the project in the model's instructions, so it knows where things live before reading anything
+- 22 slash commands
 - Persistent config via `~/.forgerc` — no env vars every session
 - Claude Code-style terminal UI (panel header, braille spinner, `⎿` hooks)
 - Works with local models for free, no API key needed
@@ -324,6 +328,28 @@ Every policy decision is logged to `.forge/audit.db`. Use `/audit` to review rec
 
 ---
 
+## Repo map
+
+When Forge starts, it builds a short map of the project and puts it in the model's instructions. The model knows which files matter and what they define before it reads anything, which saves tool calls and context — especially on local models.
+
+How it ranks files:
+
+1. Find the names each source file defines (functions, classes, types) — TypeScript/JavaScript, Python, Go, Rust, Java/Kotlin/C#, Ruby.
+2. A file that uses a name defined in another file points at that file.
+3. PageRank over those links: files that many others depend on come first. Tests go last.
+4. Files and their names are listed, best first, until the token budget is spent.
+
+No index or `forge init` needed, and it takes about 30 ms on a project Forge's size. Use `/repomap` to see exactly what the model sees. The default budget is 1024 tokens; change it with `forge config set repoMap 2048`, or turn it off with `forge config set repoMap 0`.
+
+```
+agent/types.ts: ToolCall, ToolResult, Usage, Reply, Session, ToolSpec, ToolOutput, Tool
+policy/schema.ts: Resource, Effect, PolicyDecision, ActionRequest, PolicyRule, ForgePolicy
+policy/check.ts: Access, Verdict, humanDecision, Who, check, policyPath, ...
+...
+```
+
+---
+
 ## Engram memory integration
 
 Forge integrates with [Engram](https://github.com/TushaeBXN/engram) — a local, private long-term memory system — to give the agent memory across sessions.
@@ -379,6 +405,7 @@ agent/
 ├── ui.ts                # terminal output: panel header, spinner, ⎿ hooks, prompt
 ├── undo.ts              # file snapshot stack for /undo
 ├── telemetry.ts         # per-tool call logging and circuit breaker
+├── repomap.ts           # ranked project outline for the system prompt
 └── providers/
     ├── anthropic.ts     # Claude via Anthropic SDK
     └── openai.ts        # OpenAI-compatible APIs (Ollama, LM Studio, Groq, Together)
@@ -400,7 +427,7 @@ policy/
 
 cli/
 ├── index.ts             # the forge command + forge config set/get
-└── commands.ts          # 20 slash commands
+└── commands.ts          # 22 slash commands
 
 model/                   # dependency index (.forge/events.db)
 verify/chain.ts          # type check → tests → lint
