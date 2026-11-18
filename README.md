@@ -254,7 +254,7 @@ Forge is one loop:
 - Tool telemetry — logs every call to `.forge/telemetry.ndjson`; `/telemetry` shows session stats
 - Circuit breaker — blocks a tool after 3 consecutive failures so the model can't thrash
 - Engram integration — long-term memory across sessions; auto-recall before every turn (optional, local)
-- Web search — `web_search` tool via DuckDuckGo, no API key; network access goes through the policy like everything else
+- Web search and fetch — `web_search` (DuckDuckGo, no API key) and `web_fetch` (pages as readable markdown); network access goes through the policy like everything else
 - 20 slash commands
 - Persistent config via `~/.forgerc` — no env vars every session
 - Claude Code-style terminal UI (panel header, braille spinner, `⎿` hooks)
@@ -304,7 +304,7 @@ rules:
     effect: deny
 ```
 
-Anything that leaves your machine is the `network` resource. `web_search` is operation `search` on target `duckduckgo.com`, and with no rule Forge asks first. To allow searches without asking, or to block all network access:
+Anything that leaves your machine is the `network` resource. `web_search` is operation `search` on target `duckduckgo.com`; `web_fetch` is operation `fetch` on the host it contacts (for example `docs.python.org`). With no rule Forge asks first. `web_fetch` follows redirects only on the same host — a redirect to another host is handed back to the model, so that host gets its own check. To allow searches without asking, or to block all network access:
 
 ```yaml
   - id: allow-web-search
@@ -389,7 +389,7 @@ tools/
 ├── bash.ts              # bash
 ├── project.ts           # find_dependents, verify
 ├── memory.ts            # recall and remember (Engram integration)
-├── web.ts               # web_search (DuckDuckGo, no key)
+├── web.ts               # web_search (DuckDuckGo, no key), web_fetch
 └── index.ts             # the tool list
 
 policy/

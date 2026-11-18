@@ -6,14 +6,14 @@ import { makeWriteTools, read } from "./files.js";
 import { recall, remember } from "./memory.js";
 import { findDependents, verify } from "./project.js";
 import { glob, grep } from "./search.js";
-import { webSearch } from "./web.js";
+import { webFetch, webSearch } from "./web.js";
 
 export { read } from "./files.js";
 
 /** Build the tool list. Pass an undo stack to enable /undo in the CLI. */
 export function makeTools(undo?: UndoStack): Tool[] {
   const { write, edit } = makeWriteTools(undo);
-  return [read, write, edit, glob, grep, bash, findDependents, verify, webSearch, recall, remember];
+  return [read, write, edit, glob, grep, bash, findDependents, verify, webSearch, webFetch, recall, remember];
 }
 
 /** Default tool list without undo (tests, demo). */
