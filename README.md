@@ -253,6 +253,7 @@ Forge is one loop:
 - File undo (`/undo`) — every write snapshotted before it happens
 - Tool telemetry — logs every call to `.forge/telemetry.ndjson`; `/telemetry` shows session stats
 - Circuit breaker — blocks a tool after 3 consecutive failures so the model can't thrash
+- Engram integration — long-term memory across sessions; auto-recall before every turn (optional, local)
 - 20 slash commands
 - Persistent config via `~/.forgerc` — no env vars every session
 - Claude Code-style terminal UI (panel header, braille spinner, `⎿` hooks)
@@ -306,6 +307,31 @@ Every policy decision is logged to `.forge/audit.db`. Use `/audit` to review rec
 
 ---
 
+## Engram memory integration
+
+Forge integrates with [Engram](https://github.com/TushaeBXN/engram) — a local, private long-term memory system — to give the agent memory across sessions.
+
+**Setup:** Install Engram, then start the server before running Forge:
+
+```bash
+pip install engram-chateau
+engram serve          # starts at http://127.0.0.1:7742
+```
+
+Then run Forge normally. No config needed — it detects Engram automatically.
+
+**What it does:**
+
+- **Auto-recall** — before every turn, Forge silently queries Engram for up to 3 memories relevant to your message and prepends them as context. The model sees what it did in past sessions without you having to ask.
+- **`recall` tool** — the model can search memory directly: "what did we decide about the database schema?" pulls matching memories from past sessions.
+- **`remember` tool** — the model can save anything worth keeping: "remember that this project uses row-level security" stores it for future sessions.
+
+If Engram is not running, Forge works exactly as before — the integration is fully passive and fails silently.
+
+Engram stores everything locally (`~/.engram/`). No cloud, no API key, no data leaves your machine.
+
+---
+
 ## Telemetry and circuit breaker
 
 Every tool call is recorded to `.forge/telemetry.ndjson` with the tool name, success or failure, duration, and any error message. Use `/telemetry` inside a conversation to see a live summary:
@@ -345,6 +371,7 @@ tools/
 ├── search.ts            # glob, grep
 ├── bash.ts              # bash
 ├── project.ts           # find_dependents, verify
+├── memory.ts            # recall and remember (Engram integration)
 └── index.ts             # the tool list
 
 policy/
