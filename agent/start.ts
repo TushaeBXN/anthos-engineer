@@ -70,9 +70,11 @@ function createSession(model: ModelInfo, system: string, specs: ToolSpec[]): Ses
     : openaiSession(model.model, system, specs, model.baseUrl);
 }
 
-/** "Always" covers all file reads, all file writes, or one exact command. */
+/** "Always" covers all file reads, all file writes, one exact command, or one network operation on one host. */
 function approvalKind(access: Access): string {
-  return access.kind === "shell" ? `shell:${access.command}` : access.kind;
+  if (access.kind === "shell") return `shell:${access.command}`;
+  if (access.kind === "network") return `network:${access.operation}:${access.target}`;
+  return access.kind;
 }
 
 function systemPrompt(cwd: string): string {

@@ -254,6 +254,7 @@ Forge is one loop:
 - Tool telemetry — logs every call to `.forge/telemetry.ndjson`; `/telemetry` shows session stats
 - Circuit breaker — blocks a tool after 3 consecutive failures so the model can't thrash
 - Engram integration — long-term memory across sessions; auto-recall before every turn (optional, local)
+- Web search — `web_search` tool via DuckDuckGo, no API key; network access goes through the policy like everything else
 - 20 slash commands
 - Persistent config via `~/.forgerc` — no env vars every session
 - Claude Code-style terminal UI (panel header, braille spinner, `⎿` hooks)
@@ -300,6 +301,22 @@ rules:
     resource: git
     operation: push
     target: "main"
+    effect: deny
+```
+
+Anything that leaves your machine is the `network` resource. `web_search` is operation `search` on target `duckduckgo.com`, and with no rule Forge asks first. To allow searches without asking, or to block all network access:
+
+```yaml
+  - id: allow-web-search
+    resource: network
+    operation: search
+    target: "*"
+    effect: allow
+
+  - id: no-network
+    resource: network
+    operation: "*"
+    target: "*"
     effect: deny
 ```
 
@@ -372,6 +389,7 @@ tools/
 ├── bash.ts              # bash
 ├── project.ts           # find_dependents, verify
 ├── memory.ts            # recall and remember (Engram integration)
+├── web.ts               # web_search (DuckDuckGo, no key)
 └── index.ts             # the tool list
 
 policy/

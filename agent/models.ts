@@ -67,7 +67,7 @@ interface ForgeRc {
   priceOutput?: number;
 }
 
-const RC_PATH = path.join(os.homedir(), ".forgerc");
+const RC_PATH = process.env["FORGE_RC"] ?? path.join(os.homedir(), ".forgerc");
 
 function readRc(): ForgeRc {
   try {

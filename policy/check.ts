@@ -18,6 +18,8 @@ import type { ActionRequest, ForgePolicy, PolicyDecisionRecord, Resource } from 
 export type Access =
   | { kind: "read" | "write"; path: string }
   | { kind: "shell"; command: string }
+  /** A request that leaves this machine. target is the host contacted. */
+  | { kind: "network"; operation: string; target: string }
   | { kind: "none" };
 
 export interface Verdict {
@@ -31,6 +33,7 @@ export interface Verdict {
 export function humanDecision(access: Access, approved: boolean, who: Who): PolicyDecisionRecord {
   const request: ActionRequest =
     access.kind === "shell" ? { resource: "shell", operation: access.command, target: "*", ...who }
+    : access.kind === "network" ? { resource: "network", operation: access.operation, target: access.target, ...who }
     : { resource: "filesystem", operation: access.kind, target: access.kind === "none" ? "" : access.path, ...who };
   return {
     request,
@@ -59,6 +62,7 @@ export function check(
     return { decision: "allow", reason: "No file or shell access", records: [] };
   }
   if (access.kind === "shell") return checkShell(access.command, policy, who);
+  if (access.kind === "network") return verdict([ask("network", access.operation, access.target, policy, who)]);
 
   const target = policyPath(access.path, cwd);
   if (access.kind === "write" && PROTECTED_WRITES.some((p) => target === p || target.startsWith(p + "/"))) {

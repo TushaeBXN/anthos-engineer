@@ -1,4 +1,4 @@
-export type Resource = "filesystem" | "shell" | "git" | "aws";
+export type Resource = "filesystem" | "shell" | "git" | "network" | "aws";
 export type Effect = "allow" | "deny";
 export type PolicyDecision = "allow" | "deny" | "requires_approval";
 
