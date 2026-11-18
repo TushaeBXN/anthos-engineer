@@ -67,9 +67,12 @@ export function createAgent(cwd = process.cwd()): CreatedAgent {
 }
 
 function createSession(model: ModelInfo, system: string, specs: ToolSpec[]): Session {
+  if (model.keyEnv && !model.apiKey && model.keyEnv !== "FORGE_API_KEY") {
+    throw new Error(`Set ${model.keyEnv} to use ${model.provider}:\n\n    export ${model.keyEnv}=...\n\n  Run "forge providers" to see every provider and the key it needs.`);
+  }
   return model.provider === "anthropic"
     ? anthropicSession(model.model, system, specs)
-    : openaiSession(model.model, system, specs, model.baseUrl);
+    : openaiSession(model.model, system, specs, model.baseUrl, model.apiKey);
 }
 
 /** "Always" covers all file reads, all file writes, one exact command, or one network operation on one host. */

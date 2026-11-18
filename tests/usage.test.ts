@@ -38,7 +38,25 @@ describe("resolveModel", () => {
   });
 
   test("a provider without a default model asks for one", () => {
-    assert.throws(() => resolveModel({ FORGE_PROVIDER: "lmstudio" }), /FORGE_MODEL/);
+    assert.throws(() => resolveModel({ FORGE_PROVIDER: "lmstudio" }), /forge config set model/);
+  });
+
+  test("each provider reads only its own key", () => {
+    const env = { OPENAI_API_KEY: "sk-openai", OPENROUTER_API_KEY: "sk-or" };
+    const openrouter = resolveModel({ ...env, FORGE_PROVIDER: "openrouter", FORGE_MODEL: "x" });
+    assert.equal(openrouter.keyEnv, "OPENROUTER_API_KEY");
+    assert.equal(openrouter.apiKey, "sk-or");
+    assert.equal(openrouter.baseUrl, "https://openrouter.ai/api/v1");
+
+    const groq = resolveModel({ ...env, FORGE_PROVIDER: "groq" });
+    assert.equal(groq.apiKey, undefined, "the OpenAI key is never sent to Groq");
+  });
+
+  test("local providers need no key; unknown ones use FORGE_API_KEY", () => {
+    assert.equal(resolveModel({ FORGE_PROVIDER: "ollama", FORGE_MODEL: "m" }).keyEnv, null);
+    const custom = resolveModel({ FORGE_PROVIDER: "acme", FORGE_MODEL: "m", FORGE_API_KEY: "k" });
+    assert.equal(custom.keyEnv, "FORGE_API_KEY");
+    assert.equal(custom.apiKey, "k");
   });
 
   test("context size and prices can be set by hand", () => {

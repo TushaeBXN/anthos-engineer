@@ -10,13 +10,14 @@
 import { glob } from "glob";
 import { runTurn } from "../agent/loop.js";
 import { createAgent } from "../agent/start.js";
-import { RC_PATH, writeRc } from "../agent/models.js";
+import { PROVIDERS, RC_PATH, resolveModel, writeRc } from "../agent/models.js";
 import { printHeader, printStatus, prompt, statusLine } from "../agent/ui.js";
 import { runCommand, type CommandContext } from "./commands.js";
 
 const HELP = `
   forge                          Start a conversation
   forge "<request>"              Do one thing and exit
+  forge providers                List providers and the key each needs
   forge init                     Index the project
   forge query <name>             Show what depends on a function or module
   forge config set <key> <val>   Save a setting to ~/.forgerc
@@ -89,6 +90,29 @@ async function init(): Promise<void> {
   console.log(`\n  Indexed ${files.length} files: ${graph.nodeCount()} functions and modules, ${graph.edgeCount()} links.\n`);
 }
 
+/** Every provider Forge knows, the key each needs, and whether that key is set. Keys are never printed. */
+function providers(): void {
+  let current = "";
+  try {
+    current = resolveModel().provider;
+  } catch {
+    // No model chosen yet; nothing to mark.
+  }
+  console.log("");
+  for (const [name, p] of Object.entries(PROVIDERS)) {
+    const key = p.keyEnv ? `${p.keyEnv} ${process.env[p.keyEnv] ? "(set)" : "(not set)"}` : "no key needed";
+    const mark = name === current ? "▶" : " ";
+    console.log(`  ${mark} ${name.padEnd(11)} ${`${p.weights} · ${p.runs}`.padEnd(18)} ${key.padEnd(32)} ${p.note ?? ""}`);
+  }
+  console.log(`
+  Any other OpenAI-compatible server:
+    forge config set provider <name>   forge config set baseUrl <url>   export FORGE_API_KEY=...
+
+  Switch:  forge config set provider openrouter
+           forge config set model <model-name>
+`);
+}
+
 async function query(name: string): Promise<void> {
   const { findDependents } = await import("../tools/project.js");
   const result = await findDependents.run({ name }, process.cwd());
@@ -102,6 +126,7 @@ async function main(): Promise<void> {
   if (command === undefined) return chat();
   if (command === "help" || command === "--help" || command === "-h") return console.log(HELP);
   if (command === "init") return init();
+  if (command === "providers") return providers();
   if (command === "config") {
     const [sub, key, ...vals] = rest;
     if (sub === "get" || sub === undefined) {

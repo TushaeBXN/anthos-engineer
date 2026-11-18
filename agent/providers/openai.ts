@@ -10,9 +10,10 @@ export function openaiSession(
   system: string,
   tools: ToolSpec[],
   baseUrl: string | undefined,
+  apiKey: string | undefined,
 ): Session {
   // Local servers ignore the key, but the client requires one to be set.
-  const client = new OpenAI({ apiKey: process.env["OPENAI_API_KEY"] ?? "not-needed", baseURL: baseUrl });
+  const client = new OpenAI({ apiKey: apiKey ?? "not-needed", baseURL: baseUrl });
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [{ role: "system", content: system }];
   const apiTools: OpenAI.Chat.ChatCompletionTool[] = tools.map((tool) => ({
     type: "function",

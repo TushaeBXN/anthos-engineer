@@ -140,6 +140,7 @@ qwen2.5-coder:14b  ·  open · local  ·  14k used  ·  free  ·  +9 −0 in 1 f
 forge config set provider ollama          # save your provider
 forge config set model <model-name>       # save your model
 forge config get                          # show ~/.forgerc
+forge providers                           # every provider, and whether its key is set
 ```
 
 Settings are saved to `~/.forgerc` and survive terminal restarts — no need to `export` env vars every time.
@@ -192,9 +193,10 @@ forge config get
 
 | Variable | Effect |
 |---|---|
-| `FORGE_PROVIDER` | Provider: `anthropic`, `ollama`, `openai`, `lmstudio`, `groq`, `together` |
+| `FORGE_PROVIDER` | Provider name — run `forge providers` for the list |
 | `FORGE_MODEL` | Model name |
 | `FORGE_BASE_URL` | Base URL for OpenAI-compatible servers |
+| `FORGE_API_KEY` | Key for an OpenAI-compatible server Forge doesn't list |
 | `FORGE_BUDGET_USD` | Stop the agent when this many dollars are spent |
 | `FORGE_CONTEXT` | Context window size (tokens), for models Forge doesn't know |
 | `FORGE_PRICE_INPUT` | Input price per million tokens |
@@ -205,15 +207,36 @@ forge config get
 
 ## Choosing a model
 
-| Provider | `provider` value | Weights | Runs | Needs |
+Run `forge providers` to see this list with which keys you already have set.
+
+| Provider | `provider` value | Weights | Runs | Key |
 |---|---|---|---|---|
 | Anthropic (Claude) | `anthropic` | closed | hosted | `ANTHROPIC_API_KEY` |
 | OpenAI | `openai` | closed | hosted | `OPENAI_API_KEY` |
-| Ollama | `ollama` | open | local | `ollama pull <model>` |
-| LM Studio | `lmstudio` | open | local | model running in LM Studio |
-| Groq | `groq` | open | hosted | `OPENAI_API_KEY` |
-| Together AI | `together` | open | hosted | `OPENAI_API_KEY`, `FORGE_MODEL` |
-| Any OpenAI-compatible | any name | unknown | hosted | `FORGE_BASE_URL`, `FORGE_MODEL` |
+| Google Gemini | `gemini` | closed | hosted | `GEMINI_API_KEY` |
+| xAI (Grok) | `xai` | closed | hosted | `XAI_API_KEY` |
+| Mistral | `mistral` | unknown | hosted | `MISTRAL_API_KEY` |
+| DeepSeek | `deepseek` | open | hosted | `DEEPSEEK_API_KEY` |
+| OpenRouter | `openrouter` | unknown | hosted | `OPENROUTER_API_KEY` |
+| Groq | `groq` | open | hosted | `GROQ_API_KEY` |
+| Together AI | `together` | open | hosted | `TOGETHER_API_KEY` |
+| Fireworks AI | `fireworks` | open | hosted | `FIREWORKS_API_KEY` |
+| Cerebras | `cerebras` | open | hosted | `CEREBRAS_API_KEY` |
+| Ollama | `ollama` | open | local | none |
+| LM Studio | `lmstudio` | open | local | none |
+| Any OpenAI-compatible server | any name | unknown | hosted | `FORGE_API_KEY` (optional) + `baseUrl` |
+
+Switching is two commands, and the key goes in your shell, never in `~/.forgerc` (that file is plain text):
+
+```bash
+export OPENROUTER_API_KEY=sk-or-...
+forge config set provider openrouter
+forge config set model <model id from openrouter.ai/models>
+```
+
+Each provider reads only its own key, so your OpenAI key is never sent to OpenRouter, Groq, or anyone else. If the key is missing, Forge stops before sending anything and tells you which variable to set. Most providers have no default model: pick one from the provider's model list.
+
+"Weights" is shown as `unknown` where one API serves both open and closed models (Mistral, OpenRouter).
 
 **Recommended local model** (via Ollama):
 
@@ -262,6 +285,7 @@ Forge is one loop:
 - 22 slash commands
 - Persistent config via `~/.forgerc` — no env vars every session
 - Claude Code-style terminal UI (panel header, braille spinner, `⎿` hooks)
+- 13 providers: Anthropic, OpenAI, Gemini, xAI, Mistral, DeepSeek, OpenRouter, Groq, Together, Fireworks, Cerebras, Ollama, LM Studio — plus any OpenAI-compatible server
 - Works with local models for free, no API key needed
 
 **Current limitations vs Claude Code:**

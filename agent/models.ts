@@ -23,6 +23,10 @@ export interface ModelInfo {
   price: { input: number; output: number } | null;
   /** Where OpenAI-compatible requests are sent (unused for Anthropic). */
   baseUrl: string | undefined;
+  /** The environment variable holding this provider's key; null for local servers. */
+  keyEnv: string | null;
+  /** The key itself, read from keyEnv. Never from ~/.forgerc, which is plain text. */
+  apiKey: string | undefined;
 }
 
 interface ProviderInfo {
@@ -31,15 +35,26 @@ interface ProviderInfo {
   /** Used when FORGE_MODEL is not set. Without one, FORGE_MODEL is required. */
   defaultModel?: string;
   baseUrl?: string;
+  /** Each provider reads only its own key, so one provider's key is never sent to another. */
+  keyEnv?: string;
+  /** Shown by `forge providers`. */
+  note?: string;
 }
 
-const PROVIDERS: Record<string, ProviderInfo> = {
-  anthropic: { weights: "closed", runs: "hosted", defaultModel: "claude-opus-5-5" },
-  openai: { weights: "closed", runs: "hosted", defaultModel: "gpt-4o" },
-  ollama: { weights: "open", runs: "local", defaultModel: "llama3.1", baseUrl: "http://localhost:11434/v1" },
-  lmstudio: { weights: "open", runs: "local", baseUrl: "http://localhost:1234/v1" },
-  groq: { weights: "open", runs: "hosted", defaultModel: "llama-3.3-70b-versatile", baseUrl: "https://api.groq.com/openai/v1" },
-  together: { weights: "open", runs: "hosted", baseUrl: "https://api.together.xyz/v1" },
+export const PROVIDERS: Record<string, ProviderInfo> = {
+  anthropic: { weights: "closed", runs: "hosted", defaultModel: "claude-opus-5-5", keyEnv: "ANTHROPIC_API_KEY", note: "Claude" },
+  openai: { weights: "closed", runs: "hosted", defaultModel: "gpt-4o", keyEnv: "OPENAI_API_KEY", note: "GPT models" },
+  gemini: { weights: "closed", runs: "hosted", baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai/", keyEnv: "GEMINI_API_KEY", note: "Google Gemini" },
+  xai: { weights: "closed", runs: "hosted", baseUrl: "https://api.x.ai/v1", keyEnv: "XAI_API_KEY", note: "Grok" },
+  mistral: { weights: "unknown", runs: "hosted", baseUrl: "https://api.mistral.ai/v1", keyEnv: "MISTRAL_API_KEY", note: "Mistral and Codestral" },
+  deepseek: { weights: "open", runs: "hosted", defaultModel: "deepseek-chat", baseUrl: "https://api.deepseek.com/v1", keyEnv: "DEEPSEEK_API_KEY", note: "DeepSeek's own API" },
+  openrouter: { weights: "unknown", runs: "hosted", baseUrl: "https://openrouter.ai/api/v1", keyEnv: "OPENROUTER_API_KEY", note: "Hundreds of models, one key" },
+  groq: { weights: "open", runs: "hosted", defaultModel: "llama-3.3-70b-versatile", baseUrl: "https://api.groq.com/openai/v1", keyEnv: "GROQ_API_KEY", note: "Fast open models" },
+  together: { weights: "open", runs: "hosted", baseUrl: "https://api.together.xyz/v1", keyEnv: "TOGETHER_API_KEY", note: "Open models" },
+  fireworks: { weights: "open", runs: "hosted", baseUrl: "https://api.fireworks.ai/inference/v1", keyEnv: "FIREWORKS_API_KEY", note: "Open models" },
+  cerebras: { weights: "open", runs: "hosted", baseUrl: "https://api.cerebras.ai/v1", keyEnv: "CEREBRAS_API_KEY", note: "Fast open models" },
+  ollama: { weights: "open", runs: "local", defaultModel: "llama3.1", baseUrl: "http://localhost:11434/v1", note: "Local, free" },
+  lmstudio: { weights: "open", runs: "local", baseUrl: "http://localhost:1234/v1", note: "Local, free" },
 };
 
 /** Context window and price per million tokens. Anthropic figures as of 2026-11-03. */
@@ -99,10 +114,12 @@ export function resolveModel(env: Record<string, string | undefined> = process.e
   const provider = (env["FORGE_PROVIDER"] ?? rc.provider ?? "anthropic").toLowerCase();
   const known = PROVIDERS[provider];
   const model = env["FORGE_MODEL"] ?? rc.model ?? known?.defaultModel;
-  if (!model) throw new Error(`Set FORGE_MODEL to the model you want to use with "${provider}".`);
+  if (!model) throw new Error(`Choose a model for "${provider}": forge config set model <name>  (or set FORGE_MODEL).`);
   const listed = MODELS[model];
 
   const runs = known?.runs ?? "hosted";
+  // Unknown providers (any OpenAI-compatible server) use FORGE_API_KEY.
+  const keyEnv = known ? known.keyEnv ?? null : "FORGE_API_KEY";
   const priceIn = number(env["FORGE_PRICE_INPUT"]) ?? rc.priceInput ?? null;
   const priceOut = number(env["FORGE_PRICE_OUTPUT"]) ?? rc.priceOutput ?? null;
   const price =
@@ -118,6 +135,8 @@ export function resolveModel(env: Record<string, string | undefined> = process.e
     contextWindow: number(env["FORGE_CONTEXT"]) ?? rc.context ?? listed?.contextWindow ?? null,
     price,
     baseUrl: env["FORGE_BASE_URL"] ?? rc.baseUrl ?? known?.baseUrl,
+    keyEnv,
+    apiKey: keyEnv ? env[keyEnv] || undefined : undefined,
   };
 }
 
