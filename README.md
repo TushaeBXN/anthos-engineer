@@ -282,6 +282,7 @@ Forge is one loop:
 - Engram integration — long-term memory across sessions; auto-recall before every turn (optional, local)
 - Web search and fetch — `web_search` (DuckDuckGo, no API key) and `web_fetch` (pages as readable markdown); network access goes through the policy like everything else
 - Repo map — a ranked outline of the project in the model's instructions, so it knows where things live before reading anything
+- VS Code extension — Forge in the terminal panel, plus "Ask About Selection" from the editor
 - 22 slash commands
 - Persistent config via `~/.forgerc` — no env vars every session
 - Claude Code-style terminal UI (panel header, braille spinner, `⎿` hooks)
@@ -292,7 +293,7 @@ Forge is one loop:
 - Local models are capable but less reliable — may try several wrong commands before getting it right
 - No streaming output — you wait for the full response before seeing anything
 - No context compaction — long sessions will eventually hit the model's context limit
-- No MCP, no IDE integration, no subagents
+- No MCP, no subagents
 - The 32k context wrapper (`num_ctx` Modelfile) is a manual workaround, not built-in
 - Policy rules are the only thing protecting your filesystem — no sandbox isolation yet (planned for v2)
 
@@ -349,6 +350,33 @@ Anything that leaves your machine is the `network` resource. `web_search` is ope
 ```
 
 Every policy decision is logged to `.forge/audit.db`. Use `/audit` to review recent decisions.
+
+---
+
+## VS Code
+
+The extension runs Forge in VS Code's terminal panel, so you get the same agent, approvals, policy and status line as in a shell, and it adds ways to point Forge at the code you're looking at.
+
+| Command | What it does |
+|---|---|
+| **Forge: Start** (status bar `Forge` button, or `Cmd+Alt+F`) | Opens Forge in the workspace folder, or shows it if it's already open |
+| **Forge: Ask About Selection** (`Cmd+Alt+F` with a selection, or right-click) | Asks you a question, then sends Forge "Look at `src/a.ts` lines 10-20: your question" |
+| **Forge: Ask About This File** (right-click) | Same, for the whole file |
+| **Forge: Show Repo Map** | Runs `/repomap` |
+| **Forge: Undo Last Change** | Runs `/undo` |
+
+On Windows and Linux, `Cmd+Alt+F` is `Ctrl+Alt+F`. Forge reads files from disk, so save the file before asking about it.
+
+**Install:**
+
+```bash
+npm run build && npm link          # puts the forge command on your PATH
+cd vscode-extension
+npx @vscode/vsce package --skip-license
+code --install-extension forge-vscode-0.1.0.vsix
+```
+
+If you'd rather not link the command, set **Forge: Command** in VS Code's settings to the full command, for example `npx tsx /path/to/anthos-engineer/cli/index.ts`.
 
 ---
 
@@ -448,6 +476,8 @@ policy/
 ├── evaluator.ts         # match a request against the rules
 ├── parser.ts            # load forge.policy.yaml
 └── audit.ts             # audit log (.forge/audit.db)
+
+vscode-extension/       # VS Code: Forge in the terminal panel, ask about a selection
 
 cli/
 ├── index.ts             # the forge command + forge config set/get

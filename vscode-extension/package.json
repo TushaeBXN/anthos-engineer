@@ -1,0 +1,93 @@
+{
+  "name": "forge-vscode",
+  "displayName": "Forge by Anthos Intelligence",
+  "description": "Run the Forge coding agent in VS Code: open it in the terminal panel and point it at the code you're looking at.",
+  "version": "0.1.0",
+  "publisher": "anthos-intelligence",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TushaeBXN/anthos-engineer"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "AI",
+    "Other"
+  ],
+  "files": [
+    "extension.js",
+    "messages.js"
+  ],
+  "main": "./extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "forge.start",
+        "title": "Start",
+        "category": "Forge"
+      },
+      {
+        "command": "forge.askSelection",
+        "title": "Ask About Selection",
+        "category": "Forge"
+      },
+      {
+        "command": "forge.askFile",
+        "title": "Ask About This File",
+        "category": "Forge"
+      },
+      {
+        "command": "forge.repomap",
+        "title": "Show Repo Map",
+        "category": "Forge"
+      },
+      {
+        "command": "forge.undo",
+        "title": "Undo Last Change",
+        "category": "Forge"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "forge.askSelection",
+          "when": "editorHasSelection",
+          "group": "forge@1"
+        },
+        {
+          "command": "forge.askFile",
+          "group": "forge@2"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "forge.askSelection",
+        "key": "ctrl+alt+f",
+        "mac": "cmd+alt+f",
+        "when": "editorHasSelection"
+      },
+      {
+        "command": "forge.start",
+        "key": "ctrl+alt+f",
+        "mac": "cmd+alt+f",
+        "when": "!editorHasSelection"
+      }
+    ],
+    "configuration": {
+      "title": "Forge",
+      "properties": {
+        "forge.command": {
+          "type": "string",
+          "default": "forge",
+          "markdownDescription": "Command that starts Forge. Use `forge` after `npm run build && npm link`, or the full path, e.g. `npx tsx /path/to/anthos-engineer/cli/index.ts`."
+        }
+      }
+    }
+  }
+}
