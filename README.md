@@ -634,3 +634,7 @@ Tests never read your `~/.forgerc`, so they give the same result on any machine.
 ## License
 
 MIT — Brian Tushae Thomas / Anthos Intelligence
+
+### Acknowledgment
+
+This repository began as a copy of [Free Claude Code](https://github.com/Alishahryar1/free-claude-code) by Ali Khokhar, an MIT-licensed proxy that lets Claude Code use other model providers. Forge has since been rewritten from scratch and none of that code remains in the current files, but its history is still in this repository's git log. Thanks to Ali Khokhar and its contributors for the starting point.
