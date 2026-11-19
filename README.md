@@ -32,47 +32,44 @@ ollama create forge-deepseek -f /tmp/Modelfile
 ```
 
 ```bash
-# 3. Clone and install
-git clone https://github.com/TushaeBXN/anthos-engineer.git
-cd anthos-engineer
-npm install
-npm install-scripts approve better-sqlite3 esbuild fsevents
-npm rebuild better-sqlite3
+# 3. Install Forge
+npm install -g forge-anthos-intelligence
 ```
 
 ```bash
 # 4. Save your model settings once — survives terminal restarts
-npx tsx cli/index.ts config set provider ollama
-npx tsx cli/index.ts config set model forge-deepseek
+forge config set provider ollama
+forge config set model forge-deepseek
 ```
 
 ```bash
-# 5. Run from any terminal
-cd anthos-engineer && npx tsx cli/index.ts
+# 5. Run it in any project folder
+forge
 ```
 
 ### Anthropic (Claude)
 
 ```bash
+npm install -g forge-anthos-intelligence
+forge config set provider anthropic
+export ANTHROPIC_API_KEY=sk-ant-...
+forge
+```
+
+Any other provider works the same way: `forge providers` lists them all and the key each one needs.
+
+### From source
+
+To work on Forge itself, or to run the newest unreleased code:
+
+```bash
 git clone https://github.com/TushaeBXN/anthos-engineer.git
 cd anthos-engineer
 npm install
-npm install-scripts approve better-sqlite3 esbuild fsevents
-npm rebuild better-sqlite3
-
-npx tsx cli/index.ts config set provider anthropic
-# Then set your key:
-export ANTHROPIC_API_KEY=sk-ant-...
-npx tsx cli/index.ts
-```
-
-### Install the `forge` command globally
-
-```bash
 npm run build && npm link
 ```
 
-Then run `forge` from any directory.
+`npm link` puts the `forge` command on your PATH from this folder. Run `npm run build` again after pulling changes.
 
 ---
 
@@ -439,12 +436,14 @@ On Windows and Linux, `Cmd+Alt+F` is `Ctrl+Alt+F`. Forge reads files from disk, 
 
 **Install:**
 
+1. Install the `forge` command: `npm install -g forge-anthos-intelligence`
+2. Download `forge-vscode-0.1.0.vsix` from the [latest release](https://github.com/TushaeBXN/anthos-engineer/releases/latest), then:
+
 ```bash
-npm run build && npm link          # puts the forge command on your PATH
-cd vscode-extension
-npx @vscode/vsce package
 code --install-extension forge-vscode-0.1.0.vsix
 ```
+
+To build the extension yourself instead: `cd vscode-extension && npx @vscode/vsce package`.
 
 If you'd rather not link the command, set **Forge: Command** in VS Code's settings to the full command, for example `npx tsx /path/to/anthos-engineer/cli/index.ts`.
 

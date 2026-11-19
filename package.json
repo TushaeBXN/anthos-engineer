@@ -28,7 +28,7 @@
     "node": ">=22"
   },
   "bin": {
-    "forge": "./dist/cli/index.js"
+    "forge": "dist/cli/index.js"
   },
   "files": [
     "dist",
