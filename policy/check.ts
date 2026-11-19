@@ -20,6 +20,8 @@ export type Access =
   | { kind: "shell"; command: string }
   /** A request that leaves this machine. target is the host contacted. */
   | { kind: "network"; operation: string; target: string }
+  /** A tool on an MCP server. readOnly is the server's own hint, used only to decide what may run in parallel. */
+  | { kind: "mcp"; server: string; tool: string; readOnly: boolean }
   | { kind: "none" };
 
 export interface Verdict {
@@ -34,6 +36,7 @@ export function humanDecision(access: Access, approved: boolean, who: Who, reaso
   const request: ActionRequest =
     access.kind === "shell" ? { resource: "shell", operation: access.command, target: "*", ...who }
     : access.kind === "network" ? { resource: "network", operation: access.operation, target: access.target, ...who }
+    : access.kind === "mcp" ? { resource: "mcp", operation: access.tool, target: access.server, ...who }
     : { resource: "filesystem", operation: access.kind, target: access.kind === "none" ? "" : access.path, ...who };
   return {
     request,
@@ -63,6 +66,7 @@ export function check(
   }
   if (access.kind === "shell") return checkShell(access.command, policy, who);
   if (access.kind === "network") return verdict([ask("network", access.operation, access.target, policy, who)]);
+  if (access.kind === "mcp") return verdict([ask("mcp", access.tool, access.server, policy, who)]);
 
   const target = policyPath(access.path, cwd);
   if (access.kind === "write" && PROTECTED_WRITES.some((p) => target === p || target.startsWith(p + "/"))) {

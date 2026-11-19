@@ -14,6 +14,7 @@ import * as grpc from "@grpc/grpc-js";
 import * as protoLoader from "@grpc/proto-loader";
 import { runTurn, type Agent } from "../agent/loop.js";
 import { createAgent, type AgentIO } from "../agent/start.js";
+import type { Tool } from "../agent/types.js";
 import { statusLine } from "../agent/ui.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -38,6 +39,8 @@ export interface ServeOptions {
   token?: string;
   /** Build the agent for a session. Tests pass a scripted one. */
   makeAgent?: (cwd: string, io: AgentIO) => Agent;
+  /** Tools from outside Forge (MCP) given to every session's agent. */
+  extraTools?: Tool[];
 }
 
 /** The generated service definition, shared by the server, tests and the example client. */
@@ -123,7 +126,7 @@ function session(call: grpc.ServerDuplexStream<ClientMessage, Event>, options: S
       const cwd = msg.start?.cwd || process.cwd();
       if (!fs.existsSync(cwd) || !fs.statSync(cwd).isDirectory()) return error(`Not a folder: ${cwd}`);
       try {
-        agent = (options.makeAgent ?? createAgent)(path.resolve(cwd), io);
+        agent = options.makeAgent ? options.makeAgent(path.resolve(cwd), io) : createAgent(path.resolve(cwd), io, options.extraTools);
       } catch (err) {
         return error((err as Error).message);
       }

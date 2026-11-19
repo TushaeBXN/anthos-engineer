@@ -11,7 +11,8 @@ import { glob } from "glob";
 import { runTurn } from "../agent/loop.js";
 import { createAgent } from "../agent/start.js";
 import { PROVIDERS, RC_PATH, resolveModel, writeRc } from "../agent/models.js";
-import { printHeader, printStatus, prompt, statusLine } from "../agent/ui.js";
+import type { McpConnection } from "../agent/mcp.js";
+import { confirm, printHeader, printStatus, prompt, statusLine, terminal } from "../agent/ui.js";
 import { runCommand, type CommandContext } from "./commands.js";
 
 const HELP = `
@@ -26,24 +27,48 @@ const HELP = `
 
   Keys: provider  model  baseUrl  budget  context  priceInput  priceOutput  repoMap
   Example: forge config set provider ollama
-           forge config set model hf.co/bartowski/Qwen2.5-Coder-14B-Instruct-abliterated-GGUF:Q4_K_M
+           forge config set model forge-deepseek
 `;
+
+/** Start the MCP servers in ~/.forge/mcp.json and .forge/mcp.json, and say how each went. */
+async function startMcp(): Promise<McpConnection> {
+  const { connectMcp } = await import("../agent/mcp.js");
+  const mcp = await connectMcp(process.cwd(), { trust: process.stdin.isTTY ? (q) => confirm(`${q}?`) : undefined });
+  for (const s of mcp.servers) {
+    terminal.note(`MCP ${s.name}: ${s.state === "connected" ? `${s.tools} tools` : `${s.state} — ${s.detail}`}`);
+  }
+  return mcp;
+}
 
 /** One request, then exit. */
 async function once(request: string): Promise<void> {
-  const agent = createAgent();
-  await runTurn(request, agent);
-  printStatus(agent.usage);
+  const mcp = await startMcp();
+  try {
+    const agent = createAgent(process.cwd(), undefined, mcp.tools);
+    await runTurn(request, agent);
+    printStatus(agent.usage);
+  } finally {
+    await mcp.close();
+  }
 }
 
 /** A conversation: read a line, run a turn, show the status line, repeat. */
 async function chat(): Promise<void> {
-  let agent = createAgent();
+  const mcp = await startMcp();
+  try {
+    await conversation(mcp);
+  } finally {
+    await mcp.close();
+  }
+}
+
+async function conversation(mcp: McpConnection): Promise<void> {
+  let agent = createAgent(process.cwd(), undefined, mcp.tools);
   let lastText = "";
 
   const ctx: CommandContext = {
     get agent() { return agent; },
-    reset() { agent = createAgent(); lastText = ""; },
+    reset() { agent = createAgent(process.cwd(), undefined, mcp.tools); lastText = ""; },
     lastText() { return lastText; },
   };
 
@@ -99,7 +124,11 @@ async function serve(args: string[]): Promise<void> {
   };
   const { startServer } = await import("../grpc/server.js");
   const host = flag("--host") ?? "127.0.0.1";
-  const { port } = await startServer({ host, port: Number(flag("--port") ?? 50051), token: process.env["FORGE_GRPC_TOKEN"] || undefined });
+  // Started once for the whole server. No one can approve a project's servers here, so only trusted ones start.
+  const { connectMcp } = await import("../agent/mcp.js");
+  const mcp = await connectMcp(process.cwd());
+  for (const s of mcp.servers) console.log(`  MCP ${s.name}: ${s.state === "connected" ? `${s.tools} tools` : `${s.state} — ${s.detail}`}`);
+  const { port } = await startServer({ host, port: Number(flag("--port") ?? 50051), token: process.env["FORGE_GRPC_TOKEN"] || undefined, extraTools: mcp.tools });
   console.log(`\n  Forge gRPC server on ${host}:${port}${process.env["FORGE_GRPC_TOKEN"] ? " (token required)" : ""}`);
   console.log("  Protocol: grpc/forge.proto. Press Ctrl+C to stop.\n");
 }

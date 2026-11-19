@@ -13,7 +13,7 @@ import { buildRepoMap } from "./repomap.js";
 import { loadAgentTypes, makeTaskTool } from "./subagents.js";
 import { anthropicSession } from "./providers/anthropic.js";
 import { openaiSession } from "./providers/openai.js";
-import type { Session, ToolSpec } from "./types.js";
+import type { Session, Tool, ToolSpec } from "./types.js";
 import { confirm, terminal, type Screen } from "./ui.js";
 import { UsageTracker } from "./usage.js";
 
@@ -39,12 +39,13 @@ export interface AgentIO {
   ask(label: string, reason: string): Promise<"yes" | "no" | "always">;
 }
 
-export function createAgent(cwd = process.cwd(), io?: AgentIO): CreatedAgent {
+/** extraTools: tools from outside Forge, such as MCP servers, added after Forge's own. */
+export function createAgent(cwd = process.cwd(), io?: AgentIO, extraTools: Tool[] = []): CreatedAgent {
   const model = resolveModel();
   const budget = Number(process.env["FORGE_BUDGET_USD"]);
   const alwaysAllowed = new Set<string>();
   const undo = new UndoStack();
-  const tools = makeTools(undo);
+  const tools = [...makeTools(undo), ...extraTools];
   const system = systemPrompt(cwd);
   // Sub-agents can run in parallel; their approval questions still go to the person one at a time.
   let approvals: Promise<unknown> = Promise.resolve();
@@ -104,6 +105,7 @@ function createSession(model: ModelInfo, system: string, specs: ToolSpec[]): Ses
 function approvalKind(access: Access): string {
   if (access.kind === "shell") return `shell:${access.command}`;
   if (access.kind === "network") return `network:${access.operation}:${access.target}`;
+  if (access.kind === "mcp") return `mcp:${access.server}:${access.tool}`;
   return access.kind;
 }
 

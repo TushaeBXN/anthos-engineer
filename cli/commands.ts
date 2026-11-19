@@ -8,7 +8,7 @@
  *   History    /history /undo /files /diff
  *   Project    /init /query /tools /policy /audit
  *   Output     /copy /save /help
- *   Insight    /agents /repomap /telemetry
+ *   Insight    /agents /mcp /repomap /telemetry
  */
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -284,6 +284,23 @@ cmd("audit", {
       const mark = r.decision === "allow" ? "✓" : r.decision === "deny" ? "✗" : "?";
       console.log(`  ${mark} ${r.resource} ${r.operation} ${r.target}  — ${r.reason}`);
     }
+    console.log("");
+  },
+});
+
+cmd("mcp", {
+  description: "Show MCP servers and how many tools each gave.",
+  async run(_args, ctx) {
+    const { mcpStatus } = await import("../agent/mcp.js");
+    const servers = mcpStatus();
+    console.log("");
+    if (servers.length === 0) console.log("  No MCP servers. Add them to ~/.forge/mcp.json or .forge/mcp.json.");
+    for (const s of servers) {
+      const state = s.state === "connected" ? `${s.tools} tools` : `${s.state} — ${s.detail}`;
+      console.log(`  ${s.name.padEnd(16)} ${s.source.padEnd(8)} ${state}`);
+    }
+    const names = ctx.agent.tools.filter((t) => t.name.startsWith("mcp__")).map((t) => t.name);
+    if (names.length > 0) console.log(`\n  ${names.join("\n  ")}`);
     console.log("");
   },
 });

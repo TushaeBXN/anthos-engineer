@@ -47,7 +47,8 @@ export interface ToolSpec {
   description: string;
   inputSchema: {
     type: "object";
-    properties: Record<string, { type: string; description: string }>;
+    /** JSON Schema per input. Forge's own tools use type and description; MCP tools may use anything. */
+    properties: Record<string, { type?: string | string[]; description?: string; [key: string]: unknown }>;
     required: string[];
   };
 }

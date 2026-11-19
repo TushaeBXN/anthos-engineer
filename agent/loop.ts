@@ -117,7 +117,8 @@ async function runToolsParallel(calls: ToolCall[], agent: Agent): Promise<ToolRe
     const call = calls[i]!;
     const tool = agent.tools.find((t) => t.name === call.name);
     const access = tool ? tool.access(call.input) : { kind: "none" as const };
-    if (access.kind === "write") writes.push({ idx: i, call });
+    // MCP tools can do anything; only those the server marks read-only run in parallel.
+    if (access.kind === "write" || (access.kind === "mcp" && !access.readOnly)) writes.push({ idx: i, call });
     else reads.push({ idx: i, call });
   }
 

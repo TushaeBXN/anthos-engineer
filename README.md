@@ -94,7 +94,7 @@ That's a lot of safety machinery for a coding agent. It's intentional.
 
 The biggest remaining gap is that the shell check reads command text — it is not a sandbox. A command you approve can do anything your user account can. The right fix is to run each session in an isolated container, the way tools like [Cloudroom](https://github.com/davidondrej/cloudroom) do: the model works inside a VM, sees a copy of your project, and changes only come back to your machine after you review a diff. That's the v2 target.
 
-Beyond that: streaming output so you see the model think in real time, automatic context compaction so long sessions don't hit the token limit, MCP support, and tighter tool-calling support for more local models.
+Beyond that: streaming output so you see the model think in real time, automatic context compaction so long sessions don't hit the token limit, and tighter tool-calling support for more local models.
 
 ---
 
@@ -176,6 +176,7 @@ Type any of these at the `>` prompt:
 | `/copy` | Copy last response to clipboard |
 | `/save [file]` | Save last response to a file |
 | `/agents` | List the sub-agent types |
+| `/mcp` | Show MCP servers and their tools |
 | `/repomap [tokens]` | Show the project map the model sees |
 | `/telemetry` | Show tool call stats for this session |
 | `/help` | Show all commands |
@@ -275,7 +276,7 @@ Forge is one loop:
 
 **What the model starts with** — Forge's own rules, your project's instructions (the first of `FORGE.md`, `AGENTS.md` or `CLAUDE.md`), the [repo map](#repo-map), and, if [Engram](#engram-memory-integration) is running, up to 3 relevant memories before each message.
 
-**Tools** — `read`, `write`, `edit`, `glob`, `grep`, `bash`, `find_dependents`, `verify`, `web_search`, `web_fetch`, `recall`, `remember`, and `task` (sub-agents). Every one goes through the policy check before it runs.
+**Tools** — `read`, `write`, `edit`, `glob`, `grep`, `bash`, `find_dependents`, `verify`, `web_search`, `web_fetch`, `recall`, `remember`, `task` (sub-agents), and any tools from your [MCP servers](#mcp-servers). Every one goes through the policy check before it runs.
 
 ---
 
@@ -295,7 +296,8 @@ Forge is one loop:
 - VS Code extension — Forge in the terminal panel, plus "Ask About Selection" from the editor
 - Sub-agents — the `task` tool hands a job to a child agent with its own context; same policy, shared budget
 - gRPC server — `forge serve` lets editors, web UIs and scripts drive Forge, with approvals sent to the client
-- 23 slash commands
+- MCP — tools from any MCP server, checked by the policy like Forge's own; a project's servers need your OK before they start
+- 24 slash commands
 - Persistent config via `~/.forgerc` — no env vars every session
 - Claude Code-style terminal UI (panel header, braille spinner, `⎿` hooks)
 - 13 providers: Anthropic, OpenAI, Gemini, xAI, Mistral, DeepSeek, OpenRouter, Groq, Together, Fireworks, Cerebras, Ollama, LM Studio — plus any OpenAI-compatible server
@@ -306,7 +308,6 @@ Forge is one loop:
 - When a tool is blocked, a small local model may answer from memory as if it had run. Forge still prints the `⎿ … not allowed` line and logs the block, so what actually happened is always visible
 - No streaming output — you wait for the full response before seeing anything
 - No automatic context compaction — use `/compact` by hand before a long session hits the model's limit
-- No MCP support
 - Two `general` sub-agents running in parallel can edit the same file; use parallel tasks for separate files or read-only work
 - The 32k context wrapper (`num_ctx` Modelfile) is a manual step, not built in
 - Policy rules are the only thing protecting your filesystem — no sandbox isolation yet (planned for v2)
@@ -335,7 +336,7 @@ Forge started as a one-shot planner and was rebuilt to work like Claude Code: a 
 | Telemetry and circuit breaker | — | — | Yes |
 | Streaming output | Yes | Yes | No |
 | Automatic context compaction | Yes | — | No (`/compact` by hand) |
-| MCP | Yes | Yes | No |
+| MCP | Yes | Yes | Yes — every MCP tool call goes through the policy; a project's servers need your OK |
 | Sandbox | Yes | — | No (v2) |
 
 A dash means I haven't confirmed it either way. Claude Code and OpenClaude are far larger projects; Forge's focus is the part they share least: an agent you can govern and audit, running on whatever model you choose.
@@ -351,6 +352,7 @@ A dash means I haven't confirmed it either way. Claude Code and OpenClaude are f
 | gRPC server | Yes, over a real connection | Yes — `forge serve` + the example client |
 | 13 providers | Key handling and addresses | Each hosted address answered; **no real conversation yet** (needs each provider's key) |
 | VS Code extension | Yes, against a stand-in VS Code API; packages with `vsce` | **Not yet run in VS Code** |
+| MCP | Yes, against a real MCP server (`tests/fixtures/mcp-server.ts`) | Yes — `forge-deepseek` used a server's tool; a tool with no rule was refused |
 
 ---
 
@@ -432,6 +434,67 @@ code --install-extension forge-vscode-0.1.0.vsix
 ```
 
 If you'd rather not link the command, set **Forge: Command** in VS Code's settings to the full command, for example `npx tsx /path/to/anthos-engineer/cli/index.ts`.
+
+---
+
+## MCP servers
+
+Forge can use tools from any [MCP](https://modelcontextprotocol.io) server, such as GitHub, databases or browsers. List servers in the same format Claude Code uses:
+
+| File | Whose | Trusted |
+|---|---|---|
+| `~/.forge/mcp.json` | Yours | Yes |
+| `.forge/mcp.json` in a project | The project's | Only after you say yes |
+
+```json
+{
+  "mcpServers": {
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}" }
+    },
+    "docs": {
+      "url": "https://example.com/mcp",
+      "headers": { "Authorization": "Bearer ${DOCS_TOKEN}" }
+    }
+  }
+}
+```
+
+`"command"` starts a local server; `"url"` connects to a remote one. `${VAR}` is read from your environment, so tokens stay out of the file. A local server gets only the environment variables you list, not your whole environment.
+
+Each server's tools appear as `mcp__<server>__<tool>`. `/mcp` shows every server and how many tools it gave; a server that fails to start is reported and the rest still work.
+
+**Policy:** every MCP tool call goes through the same check as everything else, as resource `mcp`, operation = the tool's name, target = the server's name. With no rule, Forge asks.
+
+```yaml
+  - id: github-reads
+    resource: mcp
+    operation: get_issue
+    target: github
+    effect: allow
+
+  - id: no-new-issues
+    resource: mcp
+    operation: create_issue
+    target: github
+    effect: deny
+
+  - id: block-a-server
+    resource: mcp
+    operation: "*"
+    target: some-server
+    effect: deny
+```
+
+`operation` is an exact tool name or `*`; `/mcp` lists each server's tool names.
+
+Tools the server marks read-only run in parallel; all others run one at a time.
+
+**A project's servers need your OK.** A `.forge/mcp.json` in a project starts commands on your machine, so a repository you clone can't run code just because you opened Forge in it. The first time, Forge shows the exact command and asks; "always" remembers it in `~/.forge/trusted-mcp.json` until that server's config changes. With no one at the keyboard (one-shot scripts, `forge serve`), untrusted project servers are skipped. A project can't replace one of your own servers by using the same name. Forge never writes to `.forge/`, so the model can't add servers either.
+
+MCP tools return text written by whoever runs the server. Treat it like any web page: it can contain instructions aimed at the model, which is one more reason the policy, not the model, decides what runs.
 
 ---
 
@@ -571,6 +634,7 @@ agent/
 ├── telemetry.ts         # per-tool call logging and circuit breaker
 ├── repomap.ts           # ranked project outline for the system prompt
 ├── subagents.ts         # the task tool, agent types, .forge/agents loader
+├── mcp.ts               # MCP servers: config, trust, connect, tools
 └── providers/
     ├── anthropic.ts     # Claude via Anthropic SDK
     └── openai.ts        # every OpenAI-compatible provider (OpenAI, Gemini, OpenRouter, Ollama, ...)
@@ -595,7 +659,7 @@ grpc/                   # forge.proto, the gRPC server, and an example client
 
 cli/
 ├── index.ts             # the forge command + forge config set/get
-└── commands.ts          # 23 slash commands
+└── commands.ts          # 24 slash commands
 
 model/                   # dependency index (.forge/events.db)
 verify/chain.ts          # type check → tests → lint
