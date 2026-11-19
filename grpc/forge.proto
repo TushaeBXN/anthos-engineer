@@ -1,0 +1,93 @@
+// Forge over gRPC: one bidirectional stream per conversation.
+//
+// Client sends Start once, then Message for each turn and Approval whenever
+// the server sends an ApprovalRequest. The server streams everything the
+// terminal would show. Policy, audit log, sub-agents and budget work exactly
+// as they do in the terminal.
+syntax = "proto3";
+
+package forge.v1;
+
+service Forge {
+  rpc Session(stream ClientMessage) returns (stream ServerEvent);
+}
+
+message ClientMessage {
+  oneof kind {
+    Start start = 1;
+    UserMessage message = 2;
+    Approval approval = 3;
+  }
+}
+
+// Begin a conversation. cwd is the project folder; empty means the server's folder.
+message Start {
+  string cwd = 1;
+}
+
+message UserMessage {
+  string text = 1;
+}
+
+// The answer to an ApprovalRequest with the same id. always = allow this kind for the rest of the session.
+message Approval {
+  string id = 1;
+  bool approved = 2;
+  bool always = 3;
+}
+
+message ServerEvent {
+  oneof kind {
+    Ready ready = 1;
+    Text text = 2;
+    Activity activity = 3;
+    Note note = 4;
+    Working working = 5;
+    ApprovalRequest approval_request = 6;
+    TurnDone turn_done = 7;
+    Error error = 8;
+  }
+}
+
+// The session is open. status is the same line the terminal shows.
+message Ready {
+  string model = 1;
+  string status = 2;
+}
+
+// The model's text.
+message Text {
+  string text = 1;
+}
+
+// A tool call: "Read agent/loop.ts", detail "+9 −0", or failed with a reason.
+message Activity {
+  string label = 1;
+  string detail = 2;
+  bool failed = 3;
+}
+
+message Note {
+  string text = 1;
+}
+
+message Working {
+  bool on = 1;
+}
+
+// The policy needs a person's yes or no. Answer with Approval { id }.
+message ApprovalRequest {
+  string id = 1;
+  string label = 2;
+  string reason = 3;
+}
+
+// One turn finished. text is the model's final answer; status is the usage line.
+message TurnDone {
+  string text = 1;
+  string status = 2;
+}
+
+message Error {
+  string message = 1;
+}

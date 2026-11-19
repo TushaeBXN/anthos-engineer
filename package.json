@@ -14,6 +14,8 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.124.0",
+    "@grpc/grpc-js": "^1.14.7",
+    "@grpc/proto-loader": "^0.8.1",
     "@types/js-yaml": "^4.0.9",
     "better-sqlite3": "^13.2.0",
     "glob": "^11.0.0",

@@ -133,6 +133,8 @@ qwen2.5-coder:14b  ·  open · local  ·  14k used  ·  free  ·  +9 −0 in 1 f
 | `forge "<request>"` | Do one thing and exit |
 | `forge init` | Index the project for `find_dependents` |
 | `forge query <name>` | Show what depends on a function or module |
+| `forge providers` | List providers and whether each key is set |
+| `forge serve [--port N]` | Run Forge as a gRPC service for editors, UIs and scripts |
 
 ### Config commands
 
@@ -285,6 +287,7 @@ Forge is one loop:
 - Repo map — a ranked outline of the project in the model's instructions, so it knows where things live before reading anything
 - VS Code extension — Forge in the terminal panel, plus "Ask About Selection" from the editor
 - Sub-agents — the `task` tool hands a job to a child agent with its own context; same policy, shared budget
+- gRPC server — `forge serve` lets editors, web UIs and scripts drive Forge, with approvals sent to the client
 - 23 slash commands
 - Persistent config via `~/.forgerc` — no env vars every session
 - Claude Code-style terminal UI (panel header, braille spinner, `⎿` hooks)
@@ -379,6 +382,28 @@ code --install-extension forge-vscode-0.1.0.vsix
 ```
 
 If you'd rather not link the command, set **Forge: Command** in VS Code's settings to the full command, for example `npx tsx /path/to/anthos-engineer/cli/index.ts`.
+
+---
+
+## gRPC server
+
+`forge serve` runs Forge without a terminal, for editors, web UIs and scripts. Each `Session` call is one conversation over a two-way stream ([grpc/forge.proto](grpc/forge.proto)):
+
+| Client sends | Server streams back |
+|---|---|
+| `Start { cwd }` once | `Ready { model, status }` |
+| `UserMessage { text }` for each turn | `Text`, `Activity` (each tool call), `Note`, `Working` |
+| `Approval { id, approved, always }` | `ApprovalRequest { id, label, reason }` when the policy says "ask" |
+| | `TurnDone { text, status }` at the end of each turn, or `Error { message }` |
+
+It's the same agent as the terminal: policy, audit log, sub-agents, budget and memory all work unchanged. When the policy says "ask", the client receives an `ApprovalRequest` and the turn waits for its answer. If the client disconnects, every open question is answered no.
+
+```bash
+forge serve --port 50051
+npx tsx grpc/client-example.ts "what does agent/undo.ts do?" --port 50051
+```
+
+**Security:** the server listens on `127.0.0.1` only. To listen on another address you must set `FORGE_GRPC_TOKEN`, and clients then send `authorization: Bearer <token>`. The connection is not encrypted, so to reach Forge from another machine, use an SSH tunnel rather than exposing the port.
 
 ---
 
@@ -516,6 +541,7 @@ policy/
 └── audit.ts             # audit log (.forge/audit.db)
 
 vscode-extension/       # VS Code: Forge in the terminal panel, ask about a selection
+grpc/                   # forge.proto, the gRPC server, and an example client
 
 cli/
 ├── index.ts             # the forge command + forge config set/get

@@ -18,6 +18,7 @@ const HELP = `
   forge                          Start a conversation
   forge "<request>"              Do one thing and exit
   forge providers                List providers and the key each needs
+  forge serve [--port N]         Run Forge as a gRPC service (grpc/forge.proto)
   forge init                     Index the project
   forge query <name>             Show what depends on a function or module
   forge config set <key> <val>   Save a setting to ~/.forgerc
@@ -90,6 +91,19 @@ async function init(): Promise<void> {
   console.log(`\n  Indexed ${files.length} files: ${graph.nodeCount()} functions and modules, ${graph.edgeCount()} links.\n`);
 }
 
+/** forge serve [--port N] [--host H]: run Forge as a gRPC service. */
+async function serve(args: string[]): Promise<void> {
+  const flag = (name: string) => {
+    const i = args.indexOf(name);
+    return i >= 0 ? args[i + 1] : undefined;
+  };
+  const { startServer } = await import("../grpc/server.js");
+  const host = flag("--host") ?? "127.0.0.1";
+  const { port } = await startServer({ host, port: Number(flag("--port") ?? 50051), token: process.env["FORGE_GRPC_TOKEN"] || undefined });
+  console.log(`\n  Forge gRPC server on ${host}:${port}${process.env["FORGE_GRPC_TOKEN"] ? " (token required)" : ""}`);
+  console.log("  Protocol: grpc/forge.proto. Press Ctrl+C to stop.\n");
+}
+
 /** Every provider Forge knows, the key each needs, and whether that key is set. Keys are never printed. */
 function providers(): void {
   let current = "";
@@ -127,6 +141,7 @@ async function main(): Promise<void> {
   if (command === "help" || command === "--help" || command === "-h") return console.log(HELP);
   if (command === "init") return init();
   if (command === "providers") return providers();
+  if (command === "serve") return serve(rest);
   if (command === "config") {
     const [sub, key, ...vals] = rest;
     if (sub === "get" || sub === undefined) {

@@ -14,7 +14,7 @@ import { loadAgentTypes, makeTaskTool } from "./subagents.js";
 import { anthropicSession } from "./providers/anthropic.js";
 import { openaiSession } from "./providers/openai.js";
 import type { Session, ToolSpec } from "./types.js";
-import { confirm, terminal } from "./ui.js";
+import { confirm, terminal, type Screen } from "./ui.js";
 import { UsageTracker } from "./usage.js";
 
 const SYSTEM_PROMPT = `You are Forge, a software engineering agent built by Anthos Intelligence. You work in the user's project through tools.
@@ -33,7 +33,13 @@ export interface CreatedAgent extends Agent {
   undo: UndoStack;
 }
 
-export function createAgent(cwd = process.cwd()): CreatedAgent {
+/** Where output goes and who answers approval questions. Defaults to the terminal. */
+export interface AgentIO {
+  screen: Screen;
+  ask(label: string, reason: string): Promise<"yes" | "no" | "always">;
+}
+
+export function createAgent(cwd = process.cwd(), io?: AgentIO): CreatedAgent {
   const model = resolveModel();
   const budget = Number(process.env["FORGE_BUDGET_USD"]);
   const alwaysAllowed = new Set<string>();
@@ -59,15 +65,15 @@ export function createAgent(cwd = process.cwd()): CreatedAgent {
     undo,
     policy: loadPolicy(path.join(cwd, "forge.policy.yaml")),
     usage: new UsageTracker(model, budget > 0 ? budget : null),
-    screen: terminal,
+    screen: io?.screen ?? terminal,
     who: { agentId: "forge", sessionId: crypto.randomUUID() },
     cwd,
-    interactive: Boolean(process.stdin.isTTY),
-    approve(label, _reason, access) {
+    interactive: io ? true : Boolean(process.stdin.isTTY),
+    approve(label, reason, access) {
       const ask = approvals.then(async () => {
         const kind = approvalKind(access);
         if (alwaysAllowed.has(kind)) return true;
-        const answer = await confirm(`${label}?`);
+        const answer = io ? await io.ask(label, reason) : await confirm(`${label}?`);
         if (answer === "always") alwaysAllowed.add(kind);
         return answer !== "no";
       });
