@@ -1,23 +1,55 @@
 {
   "name": "forge-anthos-intelligence",
   "version": "0.1.0",
-  "description": "Forge by Anthos Intelligence — a software engineering agent for your terminal",
+  "description": "A coding agent for your terminal that checks every action against a policy you own, on open or closed models, local or hosted.",
+  "keywords": [
+    "coding-agent",
+    "ai",
+    "cli",
+    "llm",
+    "mcp",
+    "ollama",
+    "anthropic",
+    "openai",
+    "agent"
+  ],
+  "homepage": "https://github.com/TushaeBXN/anthos-engineer#readme",
+  "bugs": {
+    "url": "https://github.com/TushaeBXN/anthos-engineer/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TushaeBXN/anthos-engineer.git"
+  },
+  "license": "MIT",
+  "author": "Brian Tushae Thomas / Anthos Intelligence",
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "forge": "./dist/cli/index.js"
+  },
+  "files": [
+    "dist",
+    "!dist/demo",
+    "!dist/**/*.map",
+    "grpc/forge.proto",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsx cli/index.ts",
     "test": "FORGE_RC=/nonexistent FORGE_HOME=/nonexistent node --import tsx/esm --test tests/**/*.test.ts",
-    "demo": "node --import tsx/esm demo/server.ts"
-  },
-  "bin": {
-    "forge": "./dist/cli/index.js"
+    "demo": "node --import tsx/esm demo/server.ts",
+    "prepublishOnly": "npm run build && npm test"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.124.0",
     "@grpc/grpc-js": "^1.14.7",
     "@grpc/proto-loader": "^0.8.1",
     "@modelcontextprotocol/sdk": "^1.32.2",
-    "@types/js-yaml": "^4.0.9",
     "better-sqlite3": "^13.2.0",
     "glob": "^14.0.6",
     "js-yaml": "^5.4.1",
@@ -28,6 +60,7 @@
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.12",
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.0.0",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0"
