@@ -1,6 +1,6 @@
 {
   "name": "forge-anthos-intelligence",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "Forge by Anthos Intelligence — a software engineering agent for your terminal",
   "type": "module",
   "scripts": {
