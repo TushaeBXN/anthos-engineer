@@ -40,6 +40,22 @@ export interface Reply {
 export interface Session {
   /** onText, when given, receives the reply's text piece by piece as the model writes it. */
   send(input: string | ToolResult[], onText?: (delta: string) => void): Promise<Reply>;
+  /**
+   * Replace the conversation so far with a summary the model writes, to free context. `pending` is
+   * input not yet sent (tool results, or a message); it is folded into the summary. The next send()
+   * starts from the summary. If summarizing fails, the history is cleared and `fallback` is true.
+   * Returns null when there is nothing to compact.
+   */
+  compact?(pending: string | ToolResult[] | undefined, latestRequest: string): Promise<Compaction | null>;
+}
+
+export interface Compaction {
+  /** What the model wrote. */
+  summary: string;
+  /** All that replaces the conversation: the summary, the user's request and the latest results. */
+  carried: string;
+  usage: Usage;
+  fallback: boolean;
 }
 
 /** What the model is told about a tool. */

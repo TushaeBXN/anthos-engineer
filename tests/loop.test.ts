@@ -166,6 +166,18 @@ describe("runTurn", () => {
     assert.match((received[1] as ToolResult[])[0].output, /no one is available/);
   });
 
+  test("an empty reply gets one request for the answer, then a note instead of silence", async () => {
+    const empty = says("");
+    const { session, received } = script([empty, says("Here it is.")]);
+    assert.equal(await runTurn("what is x?", agent(session)), "Here it is.");
+    assert.match(String(received[1]), /You ended without replying[\s\S]*what is x\?/);
+
+    const twice = script([says(""), says("  ")]);
+    const a = agent(twice.session);
+    assert.equal(await runTurn("what is x?", a), "");
+    assert.deepEqual(a.log, ["note: The model ended without an answer."]);
+  });
+
   test("several tool calls in one reply each get a result, in order", async () => {
     const { session, received } = script([
       wants(

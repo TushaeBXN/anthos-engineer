@@ -82,6 +82,8 @@ interface ForgeRc {
   priceOutput?: number;
   /** Token budget for the repo map in the system prompt. 0 turns it off. */
   repoMap?: number;
+  /** Compact the conversation when it passes this share of the context window (0.7 = 70%). 0 turns it off. */
+  compactAt?: number;
 }
 
 const RC_PATH = process.env["FORGE_RC"] ?? path.join(os.homedir(), ".forgerc");
@@ -100,6 +102,44 @@ export function writeRc(updates: Partial<ForgeRc>): void {
 }
 
 export { RC_PATH };
+
+const detected = new Map<string, number>();
+
+/**
+ * Ask a local Ollama server how big the model's context window really is, once, and remember it.
+ * Ollama loads a model with its num_ctx (set in the Modelfile), else OLLAMA_CONTEXT_LENGTH, else 4096,
+ * not with the larger maximum the model supports, so that is what is used.
+ * Returns the window, or null when it isn't Ollama or can't be reached. A set context always wins.
+ */
+export async function detectContextWindow(env: Record<string, string | undefined> = process.env): Promise<number | null> {
+  let info: ModelInfo;
+  try {
+    info = resolveModel(env);
+  } catch {
+    return null;
+  }
+  if (info.contextWindow || info.provider !== "ollama" || !info.baseUrl) return info.contextWindow;
+  try {
+    const res = await fetch(`${info.baseUrl.replace(/\/v1\/?$/, "")}/api/show`, {
+      method: "POST",
+      body: JSON.stringify({ model: info.model }),
+      signal: AbortSignal.timeout(3_000),
+    });
+    if (!res.ok) return null;
+    const shown = (await res.json()) as { parameters?: string };
+    const numCtx = /(?:^|\n)\s*num_ctx\s+(\d+)/.exec(shown.parameters ?? "")?.[1];
+    const window = Number(numCtx) || number(env["OLLAMA_CONTEXT_LENGTH"]) || 4096;
+    detected.set(`${info.provider}:${info.model}`, window);
+    return window;
+  } catch {
+    return null;
+  }
+}
+
+/** When to compact: FORGE_COMPACT_AT, then ~/.forgerc, then 0.7 (70% of the context window). */
+export function compactAt(env: Record<string, string | undefined> = process.env): number {
+  return number(env["FORGE_COMPACT_AT"]) ?? readRc().compactAt ?? 0.7;
+}
 
 /** How many tokens the repo map may use: FORGE_REPO_MAP, then ~/.forgerc, then 1024. */
 export function repoMapBudget(env: Record<string, string | undefined> = process.env): number {
@@ -132,7 +172,7 @@ export function resolveModel(env: Record<string, string | undefined> = process.e
     model,
     weights: known?.weights ?? "unknown",
     runs,
-    contextWindow: number(env["FORGE_CONTEXT"]) ?? rc.context ?? listed?.contextWindow ?? null,
+    contextWindow: number(env["FORGE_CONTEXT"]) ?? rc.context ?? listed?.contextWindow ?? detected.get(`${provider}:${model}`) ?? null,
     price,
     baseUrl: env["FORGE_BASE_URL"] ?? rc.baseUrl ?? known?.baseUrl,
     keyEnv,

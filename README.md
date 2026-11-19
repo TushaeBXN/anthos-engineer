@@ -94,7 +94,7 @@ That's a lot of safety machinery for a coding agent. It's intentional.
 
 The biggest remaining gap is that the shell check reads command text — it is not a sandbox. A command you approve can do anything your user account can. The right fix is to run each session in an isolated container, the way tools like [Cloudroom](https://github.com/davidondrej/cloudroom) do: the model works inside a VM, sees a copy of your project, and changes only come back to your machine after you review a diff. That's the v2 target.
 
-Beyond that: automatic context compaction so long sessions don't hit the token limit, and tighter tool-calling support for more local models.
+Beyond that: tighter tool-calling support for more local models.
 
 ---
 
@@ -157,7 +157,7 @@ Type any of these at the `>` prompt:
 | Command | What it does |
 |---|---|
 | `/clear` | Reset the conversation and start fresh |
-| `/compact` | Summarize and compress the conversation |
+| `/compact` | Summarize the conversation now to free context (Forge also does this on its own) |
 | `/exit` | Exit Forge |
 | `/status` | Show current model, tokens, cost |
 | `/cost` | Show this session's cost breakdown |
@@ -205,7 +205,8 @@ forge config get
 | `FORGE_BASE_URL` | Base URL for OpenAI-compatible servers |
 | `FORGE_API_KEY` | Key for an OpenAI-compatible server Forge doesn't list |
 | `FORGE_BUDGET_USD` | Stop the agent when this many dollars are spent |
-| `FORGE_CONTEXT` | Context window size (tokens), for models Forge doesn't know |
+| `FORGE_CONTEXT` | Context window size (tokens), for models Forge doesn't know. Ollama's is detected on its own |
+| `FORGE_COMPACT_AT` | Summarize the conversation when it passes this share of the window (default `0.7`; `0` turns it off). Also `forge config set compactAt <n>` |
 | `FORGE_PRICE_INPUT` | Input price per million tokens |
 | `FORGE_PRICE_OUTPUT` | Output price per million tokens |
 | `FORGE_REPO_MAP` | Token budget for the repo map (default 1024; `0` turns it off). Also `forge config set repoMap <n>` |
@@ -274,6 +275,8 @@ Forge is one loop:
 
 **Streaming** — the model's reply appears as it is written, in the terminal and over gRPC, with every provider. Tool inputs are checked against each tool's schema before they run (required fields, types, allowed values), since streamed inputs aren't validated by the provider.
 
+**Automatic compaction** — when the conversation is about to outgrow the model's context window, Forge has the model summarize it and carries on from the summary, even in the middle of a task. See [Context compaction](#context-compaction).
+
 **Status line** — after every turn, Forge prints: model name · open/closed · local/hosted · tokens used · cost · lines changed.
 
 **What the model starts with** — Forge's own rules, your project's instructions (the first of `FORGE.md`, `AGENTS.md` or `CLAUDE.md`), the [repo map](#repo-map), and, if [Engram](#engram-memory-integration) is running, up to 3 relevant memories before each message.
@@ -302,6 +305,7 @@ Forge is one loop:
 - MCP — tools from any MCP server, checked by the policy like Forge's own; a project's servers need your OK before they start
 - 24 slash commands
 - Persistent config via `~/.forgerc` — no env vars every session
+- Automatic context compaction — long tasks are summarized before they outgrow the model's context window, even mid-task
 - Claude Code-style terminal UI (panel header, braille spinner, `⎿` hooks), with replies streamed as they are written
 - 13 providers: Anthropic, OpenAI, Gemini, xAI, Mistral, DeepSeek, OpenRouter, Groq, Together, Fireworks, Cerebras, Ollama, LM Studio — plus any OpenAI-compatible server
 - Works with local models for free, no API key needed
@@ -309,7 +313,6 @@ Forge is one loop:
 **Current limitations:**
 - Local models are capable but less reliable — they may try several wrong commands before getting it right
 - When a tool is blocked, a small local model may answer from memory as if it had run. Forge still prints the `⎿ … not allowed` line and logs the block, so what actually happened is always visible
-- No automatic context compaction — use `/compact` by hand before a long session hits the model's limit
 - Two `general` sub-agents running in parallel can edit the same file; use parallel tasks for separate files or read-only work
 - The 32k context wrapper (`num_ctx` Modelfile) is a manual step, not built in
 - Policy rules are the only thing protecting your filesystem — no sandbox isolation yet (planned for v2)
@@ -337,7 +340,7 @@ Forge started as a one-shot planner and was rebuilt to work like Claude Code: a 
 | File undo | Yes | — | Yes |
 | Telemetry and circuit breaker | — | — | Yes |
 | Streaming output | Yes | Yes | Yes — terminal and gRPC |
-| Automatic context compaction | Yes | — | No (`/compact` by hand) |
+| Automatic context compaction | Yes | — | Yes — mid-task, with Ollama's window detected |
 | MCP | Yes | Yes | Yes — every MCP tool call goes through the policy; a project's servers need your OK |
 | Sandbox | Yes | — | No (v2) |
 
@@ -355,6 +358,7 @@ A dash means I haven't confirmed it either way. Claude Code and OpenClaude are f
 | gRPC server | Yes, over a real connection | Yes — `forge serve` + the example client |
 | 13 providers | Key handling and addresses | Each hosted address answered; **no real conversation yet** (needs each provider's key) |
 | VS Code extension | Yes, against a stand-in VS Code API; packages with `vsce` | **Not yet run in VS Code** |
+| Context compaction | Yes — trigger, carry-over, both providers' summary requests, fallback | Yes on `forge-deepseek`: compacted once mid-task (7.8k → 1.7k) and still answered correctly |
 | Streaming | Yes — local servers speaking the OpenAI and Anthropic stream formats | Yes on `forge-deepseek`: a reply arrived in 77 pieces over 6 s, and a turn with a tool call streamed too. **Anthropic not yet run live** (no key here) |
 | MCP | Yes, against a real MCP server (`tests/fixtures/mcp-server.ts`) | Yes — `forge-deepseek` used a server's tool; a tool with no rule was refused |
 
@@ -559,6 +563,33 @@ most serious first. Do not edit anything.
 
 ---
 
+## Context compaction
+
+Every model can only hold so much text at once: its context window. On a long task, file contents and command output fill it, and the next request would fail. Forge watches for this and, before it happens, has the model write a summary of the conversation so far, then replaces the conversation with that summary and carries on.
+
+```
+⎿ Read agent/undo.ts
+⎿ Read agent/telemetry.ts
+⎿ Read agent/compaction.ts
+⎿ Read policy/check.ts
+  Context 7.8k of 32.8k: summarizing the conversation to make room.
+  Summarized: 7.8k → about 1.7k.
+```
+
+That's a real run on `forge-deepseek` with the threshold lowered for the test: after the summary it re-read one file it still needed, then answered the question about the first two files correctly.
+
+- **When:** before each request, if the conversation plus what's about to be sent would pass 70% of the window. The rest is left for the summary itself. Change it with `forge config set compactAt 0.8`; `0` turns it off.
+- **Mid-task:** it can happen between tool calls. The results of the tool calls just made go into the summary request, so nothing from the latest step is lost, and the model is then told to continue without redoing finished work.
+- **What replaces the conversation:** the model's summary (what's been done, decisions, errors, the next step), plus your latest request and the latest tool results, word for word. Forge adds those two itself rather than trusting the summary, because small models write thin summaries: in testing, a 9B model's 75-token summary dropped the question entirely, and the model wandered off task.
+- **No compacting over and over:** the system prompt and tool definitions take up space a summary can't remove. After a compaction, Forge waits until the conversation has grown by 15% of the window before compacting again.
+- **If summarizing fails** (for example the summary request itself is too large), the conversation is cleared anyway and your latest request is kept, rather than failing on the next request.
+- **`/compact`** does the same thing on demand.
+- **The cost** of the summary request counts toward the status line and your budget.
+
+**Knowing the window:** for hosted models Forge knows the size. For Ollama it asks Ollama at startup for the window the model actually runs with: the Modelfile's `num_ctx`, else `OLLAMA_CONTEXT_LENGTH`, else Ollama's default of 4096. That is often far smaller than the model's advertised maximum. For other local servers, set it with `forge config set context 32768`. With no known window, Forge can't tell when to compact, and doesn't.
+
+---
+
 ## Project index
 
 `forge init` builds an index of your TypeScript code: every file, every top-level function, every class method (named `Class.method`), which files import which, and which functions and methods call which, including calls into other files. `forge query` and the model's `find_dependents` tool read it to answer "what could break if I change this?"
@@ -674,6 +705,7 @@ agent/
 ├── undo.ts              # file snapshot stack for /undo
 ├── telemetry.ts         # per-tool call logging and circuit breaker
 ├── repomap.ts           # ranked project outline for the system prompt
+├── compaction.ts        # when and how to summarize the conversation
 ├── subagents.ts         # the task tool, agent types, .forge/agents loader
 ├── mcp.ts               # MCP servers: config, trust, connect, tools
 └── providers/
@@ -713,14 +745,14 @@ diff/semantic.ts         # semantic diff grouping
 ## Tests
 
 ```bash
-npm test               # 184 tests
+npm test               # 196 tests
 ```
 
 `npm audit` reports no known vulnerabilities in Forge's dependencies (as of 2026-11-18). This matters more than usual for an agent: the `glob` tool passes model-written patterns to `glob` and `minimatch`, so a denial-of-service bug in either could let text the model has read hang Forge.
 
 | Suite | Tests | Covers |
 |---|---|---|
-| `loop` | 17 | Tool calls and results, deny / ask / approve, unattended refusals, cut-off replies, step and budget limits |
+| `loop` | 18 | Tool calls and results, deny / ask / approve, unattended refusals, cut-off and empty replies, step and budget limits |
 | `check` | 18 | Path escapes, symlinks, chained commands, git rules, protected files |
 | `policy` | 13 | Rule matching, deny-by-default, approval rules |
 | `tools` | 20 | read, write, edit, glob, grep, bash, line counting |
@@ -728,6 +760,7 @@ npm test               # 184 tests
 | `subagents` | 8 | Agent files, read-only `explore`, policy and audit inside children, shared usage |
 | `repomap` | 6 | Definitions per language, ranking, budget |
 | `streaming` | 9 | Both providers' stream formats, tool calls rebuilt from pieces, usage, tool input checks |
+| `compaction` | 11 | When to compact, no repeat compacting, what's carried over, mid-task with pending tool results, both providers' summary requests, the fallback |
 | `grpc` | 5 | A full turn over a real connection, streamed text, approvals, token check |
 | `mcp` | 8 | A real MCP server: calls, errors, policy, project trust, a server that fails to start |
 | `extractor` | 4 | The project indexer: functions and methods, calls across files, constructors, interfaces, never library files |

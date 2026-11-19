@@ -10,7 +10,7 @@
 import { glob } from "glob";
 import { runTurn } from "../agent/loop.js";
 import { createAgent } from "../agent/start.js";
-import { PROVIDERS, RC_PATH, resolveModel, writeRc } from "../agent/models.js";
+import { PROVIDERS, RC_PATH, detectContextWindow, resolveModel, writeRc } from "../agent/models.js";
 import type { McpConnection } from "../agent/mcp.js";
 import { confirm, printHeader, printStatus, prompt, statusLine, terminal } from "../agent/ui.js";
 import { runCommand, type CommandContext } from "./commands.js";
@@ -25,7 +25,7 @@ const HELP = `
   forge config set <key> <val>   Save a setting to ~/.forgerc
   forge config get               Show the current ~/.forgerc
 
-  Keys: provider  model  baseUrl  budget  context  priceInput  priceOutput  repoMap
+  Keys: provider  model  baseUrl  budget  context  priceInput  priceOutput  repoMap  compactAt
   Example: forge config set provider ollama
            forge config set model forge-deepseek
 `;
@@ -42,6 +42,7 @@ async function startMcp(): Promise<McpConnection> {
 
 /** One request, then exit. */
 async function once(request: string): Promise<void> {
+  await detectContextWindow();
   const mcp = await startMcp();
   try {
     const agent = createAgent(process.cwd(), undefined, mcp.tools);
@@ -54,6 +55,7 @@ async function once(request: string): Promise<void> {
 
 /** A conversation: read a line, run a turn, show the status line, repeat. */
 async function chat(): Promise<void> {
+  await detectContextWindow();
   const mcp = await startMcp();
   try {
     await conversation(mcp);
@@ -126,6 +128,7 @@ async function serve(args: string[]): Promise<void> {
   const host = flag("--host") ?? "127.0.0.1";
   // Started once for the whole server. No one can approve a project's servers here, so only trusted ones start.
   const { connectMcp } = await import("../agent/mcp.js");
+  await detectContextWindow();
   const mcp = await connectMcp(process.cwd());
   for (const s of mcp.servers) console.log(`  MCP ${s.name}: ${s.state === "connected" ? `${s.tools} tools` : `${s.state} — ${s.detail}`}`);
   const { port } = await startServer({ host, port: Number(flag("--port") ?? 50051), token: process.env["FORGE_GRPC_TOKEN"] || undefined, extraTools: mcp.tools });
@@ -182,7 +185,7 @@ async function main(): Promise<void> {
     if (sub === "set") {
       if (!key || vals.length === 0) throw new Error("Usage: forge config set <key> <value>");
       const val = vals.join(" ");
-      const numKeys = new Set(["budget", "context", "priceInput", "priceOutput", "repoMap"]);
+      const numKeys = new Set(["budget", "context", "priceInput", "priceOutput", "repoMap", "compactAt"]);
       writeRc({ [key]: numKeys.has(key) ? Number(val) : val });
       console.log(`\n  Saved ${key}=${val} to ${RC_PATH}\n`);
       return;

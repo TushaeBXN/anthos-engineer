@@ -4,7 +4,8 @@
  * Replies are streamed, so text can be shown as it is written.
  */
 import OpenAI from "openai";
-import type { Reply, Session, ToolCall, ToolResult, ToolSpec } from "../types.js";
+import { CLEARED, SUMMARY_PROMPT, asText, carried, shortenForSummary, withSummary } from "../compaction.js";
+import type { Compaction, Reply, Session, ToolCall, ToolResult, ToolSpec } from "../types.js";
 
 export function openaiSession(
   model: string,
@@ -22,10 +23,56 @@ export function openaiSession(
   }));
   // Some servers reject stream_options; after the first refusal, stop sending it.
   let askForUsage = true;
+  // After a compaction, the summary that starts the next message.
+  let carry = "";
+
+  /** Add input to a message list: a user message, or one tool message per result. */
+  const append = (list: OpenAI.Chat.ChatCompletionMessageParam[], input: string | ToolResult[]) => {
+    if (typeof input === "string") list.push({ role: "user", content: input });
+    else for (const r of input) list.push({ role: "tool", tool_call_id: r.id, content: r.output });
+  };
 
   return {
+    async compact(pending, latestRequest): Promise<Compaction | null> {
+      if (messages.length <= 1 && pending === undefined) return null;
+      const request = [...messages];
+      if (pending !== undefined) append(request, typeof pending === "string" ? pending : shortenForSummary(pending));
+      request.push({ role: "user", content: SUMMARY_PROMPT });
+      messages.splice(1);
+      try {
+        const make = (choice: boolean) =>
+          client.chat.completions.create({ model, messages: request, tools: apiTools, ...(choice ? { tool_choice: "none" as const } : {}) });
+        let response;
+        try {
+          response = await make(true);
+        } catch (err) {
+          // Some servers don't accept tool_choice.
+          if (!(err instanceof OpenAI.APIError) || err.status !== 400) throw err;
+          response = await make(false);
+        }
+        const summary = (response.choices[0]?.message.content ?? "").trim();
+        if (!summary) throw new Error("empty summary");
+        carry = carried(summary, latestRequest, pending);
+        const cached = response.usage?.prompt_tokens_details?.cached_tokens ?? 0;
+        return {
+          summary,
+          carried: carry,
+          fallback: false,
+          usage: { inputTokens: (response.usage?.prompt_tokens ?? 0) - cached, cachedTokens: cached, outputTokens: response.usage?.completion_tokens ?? 0 },
+        };
+      } catch {
+        carry = carried(CLEARED, latestRequest, pending);
+        return { summary: CLEARED, carried: carry, fallback: true, usage: { inputTokens: 0, cachedTokens: 0, outputTokens: 0 } };
+      }
+    },
+
     async send(input: string | ToolResult[], onText?: (delta: string) => void): Promise<Reply> {
-      if (typeof input === "string") {
+      if (carry) {
+        // The first message after a compaction starts with the summary. Tool results here would have no
+        // tool call to answer (it was summarized away), so they go in as text.
+        messages.push({ role: "user", content: withSummary(carry, asText(input)) });
+        carry = "";
+      } else if (typeof input === "string") {
         messages.push({ role: "user", content: input });
       } else {
         for (const result of input) {

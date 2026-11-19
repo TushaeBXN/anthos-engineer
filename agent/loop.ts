@@ -14,6 +14,9 @@ import type { Reply, Session, Tool, ToolCall, ToolResult, ToolSpec } from "./typ
 import type { Screen } from "./ui.js";
 import type { UsageTracker } from "./usage.js";
 import { telemetry } from "./telemetry.js";
+import { CONTINUE, estimateTokens, shouldCompact } from "./compaction.js";
+import { compactAt } from "./models.js";
+import { tokens } from "./usage.js";
 
 const ENGRAM_BASE = "http://127.0.0.1:7742";
 
@@ -66,10 +69,19 @@ export async function runTurn(message: string, agent: Agent): Promise<string> {
     ? `[Relevant memories from past sessions]\n${memories}\n\n[User message]\n${message}`
     : message;
 
+  let askedForAnswer = false;
   for (let step = 0; step < (agent.maxSteps ?? 50); step++) {
     if (agent.usage.overBudget) {
       agent.screen.note("Budget reached. Raise FORGE_BUDGET_USD to continue.");
       return "";
+    }
+
+    // About to outgrow the context window: replace the conversation with a summary, then carry on.
+    let compacted = false;
+    const window = agent.usage.model.contextWindow;
+    if (agent.session.compact && shouldCompact(agent.usage.contextUsed, input, window, compactAt(), agent.usage.contextFloor)) {
+      compacted = await compact(agent, input, message);
+      if (compacted) input = CONTINUE;
     }
 
     // Text is shown as the model writes it when the screen can stream; otherwise all at once.
@@ -94,7 +106,8 @@ export async function runTurn(message: string, agent: Agent): Promise<string> {
       if (streamed) agent.screen.endStream?.(reply! ? reply.text : "");
     }
     agent.usage.addReply(reply.usage);
-    if (!streamed && reply.text) agent.screen.say(reply.text);
+    if (compacted) agent.usage.contextFloor = reply.usage.inputTokens + reply.usage.cachedTokens;
+    if (!streamed && reply.text.trim()) agent.screen.say(reply.text);
 
     if (reply.stopped === "refused") {
       agent.screen.note("The model declined this request.");
@@ -102,6 +115,16 @@ export async function runTurn(message: string, agent: Agent): Promise<string> {
     }
 
     if (reply.toolCalls.length === 0) {
+      // An empty reply would end the turn in silence. Ask once for the answer, then say what happened.
+      if (reply.stopped === "done" && !reply.text.trim()) {
+        if (!askedForAnswer) {
+          askedForAnswer = true;
+          input = `You ended without replying. Answer the user's request now, using what you have found:\n${message}`;
+          continue;
+        }
+        agent.screen.note("The model ended without an answer.");
+        return "";
+      }
       if (reply.stopped === "done") return reply.text;
       input = "Your reply was cut off at the output limit. Continue from where you stopped.";
       continue;
@@ -120,6 +143,25 @@ export async function runTurn(message: string, agent: Agent): Promise<string> {
 
   agent.screen.note("Stopped: too many steps in one turn.");
   return "";
+}
+
+/** Summarize the conversation to free context. True when it was replaced (pending input is now in the summary). */
+export async function compact(agent: Agent, pending: string | ToolResult[] | undefined, latestRequest: string): Promise<boolean> {
+  const window = agent.usage.model.contextWindow;
+  const before = agent.usage.contextUsed + estimateTokens(pending);
+  agent.screen.note(`Context ${tokens(before)}${window ? ` of ${tokens(window)}` : ""}: summarizing the conversation to make room.`);
+  agent.screen.working(true);
+  const result = await agent.session.compact!(pending, latestRequest).finally(() => agent.screen.working(false));
+  if (!result) return false;
+  agent.usage.addReply(result.usage);
+  // The next request starts from the summary; until it reports its real size, count the summary.
+  agent.usage.contextUsed = estimateTokens(result.carried);
+  agent.screen.note(
+    result.fallback
+      ? "Summarizing failed, so the earlier conversation was cleared. Your latest request was kept."
+      : `Summarized: ${tokens(before)} → about ${tokens(agent.usage.contextUsed)}.`,
+  );
+  return true;
 }
 
 /**

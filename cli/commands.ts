@@ -59,15 +59,18 @@ cmd("clear", {
 });
 
 cmd("compact", {
-  description: "Summarize the conversation and restart with that summary to free up context.",
-  run(_args, ctx) {
-    const last = ctx.lastText();
-    ctx.reset();
-    if (last) {
-      console.log("\n  Compacting conversation…\n");
-      return { inject: `Here is a summary of our work so far: ${last}\n\nContinue from here.` };
+  description: "Summarize the conversation now to free up context (Forge also does this on its own when it fills up).",
+  async run(_args, ctx) {
+    const { compact } = await import("../agent/loop.js");
+    if (!ctx.agent.session.compact) {
+      console.log("\n  This model's connection can't summarize the conversation.\n");
+      return;
     }
-    console.log("\n  Nothing to compact.\n");
+    if (!(await compact(ctx.agent, undefined, ""))) {
+      console.log("\n  Nothing to compact yet.\n");
+      return;
+    }
+    return { refreshStatus: true };
   },
 });
 

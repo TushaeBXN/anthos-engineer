@@ -18,6 +18,8 @@ export class UsageTracker {
   outputTokens = 0;
   /** Tokens the conversation occupies right now (the size of the last request). */
   contextUsed = 0;
+  /** The context size right after the last compaction; what compaction can't shrink (system prompt, tools). */
+  contextFloor = 0;
   private files = new Map<string, { added: number; removed: number }>();
 
   constructor(
@@ -105,7 +107,7 @@ export class UsageTracker {
   }
 }
 
-function tokens(n: number): string {
+export function tokens(n: number): string {
   if (n >= 1_000_000) return `${trim(n / 1_000_000)}M`;
   if (n >= 1_000) return `${trim(n / 1_000)}k`;
   return String(n);
