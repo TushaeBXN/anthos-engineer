@@ -43,6 +43,7 @@ Requires Node.js 22+. Choose a model once with `npx tsx cli/index.ts config set 
 | `agent/undo.ts` | File snapshots for `/undo` |
 | `agent/telemetry.ts` | Per-tool logging and circuit breaker |
 | `agent/repomap.ts` | Ranked project outline for the system prompt |
+| `agent/compaction.ts` | When and how to summarize the conversation to free context |
 | `agent/subagents.ts` | The `task` tool, agent types, `.forge/agents/` loader |
 | `agent/mcp.ts` | MCP servers: config, project trust, connect, wrap tools |
 | `agent/providers/anthropic.ts` | Anthropic SDK |

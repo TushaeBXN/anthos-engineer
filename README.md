@@ -255,7 +255,7 @@ Each provider reads only its own key, so your OpenAI key is never sent to OpenRo
 
 > **Important:** Not all GGUF models support Ollama's tool-calling protocol. If Forge prints raw JSON instead of executing tools, the model doesn't support tool calling. Use `forge-deepseek` or `llama3.1` to avoid this.
 >
-> Always create local models with `num_ctx 32768` via a Modelfile — the default 4096 token context is too small for real coding tasks.
+> Always create local models with `num_ctx 32768` via a Modelfile — the default 4096 token context is too small for real coding tasks. Forge reads that window from Ollama at startup, so the status line shows how much is left and [context compaction](#context-compaction) knows when to step in.
 
 The model must support tool calling.
 
@@ -303,10 +303,12 @@ Forge is one loop:
 - Sub-agents — the `task` tool hands a job to a child agent with its own context; same policy, shared budget
 - gRPC server — `forge serve` lets editors, web UIs and scripts drive Forge, with approvals sent to the client
 - MCP — tools from any MCP server, checked by the policy like Forge's own; a project's servers need your OK before they start
+- Xcode — Apple's MCP bridge (`xcrun mcpbridge`) gives Forge Xcode's build, test and preview tools; the repo map reads Swift
 - 24 slash commands
 - Persistent config via `~/.forgerc` — no env vars every session
 - Automatic context compaction — long tasks are summarized before they outgrow the model's context window, even mid-task
 - Claude Code-style terminal UI (panel header, braille spinner, `⎿` hooks), with replies streamed as they are written
+- Every tool input checked against the tool's schema (required fields, types, allowed values) before the policy check
 - 13 providers: Anthropic, OpenAI, Gemini, xAI, Mistral, DeepSeek, OpenRouter, Groq, Together, Fireworks, Cerebras, Ollama, LM Studio — plus any OpenAI-compatible server
 - Works with local models for free, no API key needed
 
@@ -314,7 +316,8 @@ Forge is one loop:
 - Local models are capable but less reliable — they may try several wrong commands before getting it right
 - When a tool is blocked, a small local model may answer from memory as if it had run. Forge still prints the `⎿ … not allowed` line and logs the block, so what actually happened is always visible
 - Two `general` sub-agents running in parallel can edit the same file; use parallel tasks for separate files or read-only work
-- The 32k context wrapper (`num_ctx` Modelfile) is a manual step, not built in
+- The 32k context wrapper (`num_ctx` Modelfile) is a manual step. Forge reads the window from Ollama once it's set, but doesn't create the Modelfile for you
+- Not yet run for real: Xcode, the VS Code extension, and a conversation on any provider other than Ollama (Anthropic included). Each is covered by tests against stand-ins; see [What has been tested](#what-has-been-tested-and-how)
 - Policy rules are the only thing protecting your filesystem — no sandbox isolation yet (planned for v2)
 
 ---
@@ -342,6 +345,7 @@ Forge started as a one-shot planner and was rebuilt to work like Claude Code: a 
 | Streaming output | Yes | Yes | Yes — terminal and gRPC |
 | Automatic context compaction | Yes | — | Yes — mid-task, with Ollama's window detected |
 | MCP | Yes | Yes | Yes — every MCP tool call goes through the policy; a project's servers need your OK |
+| Xcode (Apple's MCP bridge) | Yes | — | Yes, not yet tried with real Xcode |
 | Sandbox | Yes | — | No (v2) |
 
 A dash means I haven't confirmed it either way. Claude Code and OpenClaude are far larger projects; Forge's focus is the part they share least: an agent you can govern and audit, running on whatever model you choose.
@@ -764,13 +768,14 @@ vscode-extension/       # VS Code: Forge in the terminal panel, ask about a sele
 grpc/                   # forge.proto, the gRPC server, and an example client
 
 cli/
-├── index.ts             # the forge command + forge config set/get
+├── index.ts             # the forge command: chat, one-shot, config, providers, serve, init, query
 └── commands.ts          # 24 slash commands
 
 model/                   # the project index behind forge init and find_dependents (.forge/events.db)
 verify/chain.ts          # type check → tests → lint
 executor/git.ts          # guarded git helpers
 diff/semantic.ts         # semantic diff grouping
+tests/                   # 198 tests; fixtures/ holds small MCP servers used by them
 ```
 
 ---
