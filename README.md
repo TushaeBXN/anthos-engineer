@@ -94,32 +94,35 @@ That's a lot of safety machinery for a coding agent. It's intentional.
 
 The biggest remaining gap is that the shell check reads command text — it is not a sandbox. A command you approve can do anything your user account can. The right fix is to run each session in an isolated container, the way tools like [Cloudroom](https://github.com/davidondrej/cloudroom) do: the model works inside a VM, sees a copy of your project, and changes only come back to your machine after you review a diff. That's the v2 target.
 
-Beyond that: streaming output so you see the model think in real time, context compaction so long sessions don't hit the token limit, and tighter tool-calling support for more local models.
+Beyond that: streaming output so you see the model think in real time, automatic context compaction so long sessions don't hit the token limit, MCP support, and tighter tool-calling support for more local models.
 
 ---
 
 ## What it looks like
 
+A real session on the local `forge-deepseek` model, using a sub-agent:
+
 ```
 ╭────────────────────────────────────────────────────────────────────────╮
-│  ▶  FORGE  by Anthos Intelligence                                       │
-│     qwen2.5-coder:14b · open · local  ·  0 used  ·  free               │
+│ ▶  FORGE  by Anthos Intelligence                                       │
+│ forge-deepseek · open · local  ·  0 used  ·  free                      │
 ╰────────────────────────────────────────────────────────────────────────╯
 
-> add a health check endpoint
+> find which file defines the circuit breaker and how many failures trip it
 
-⠹
-⎿ Read src/api.ts
-⎿ Edit src/api.ts  +9 −0
-⎿ Bash  npx tsc --noEmit
+⎿ explore · Search consecutive.*fail|fail.*consecutive
+⎿ explore · Search failure.*threshold|threshold.*failure
+⎿ explore · Search circuit.*breaker|breaker.*circuit
+⎿ explore · Read agent/telemetry.ts
+⎿ Task  [explore] Find circuit breaker file
 
-I added GET /health to src/api.ts. Type check passes.
+The circuit breaker is defined in `agent/telemetry.ts` and trips after 3 consecutive failures.
 
-─────────────────────────────────────────────────────────────────────────
-qwen2.5-coder:14b  ·  open · local  ·  14k used  ·  free  ·  +9 −0 in 1 file
-
->
+────────────────────────────────────────────────────────────
+forge-deepseek · open · local  ·  4.2k used  ·  free
 ```
+
+Every `⎿` line is a tool call that passed the policy check. Lines starting with a name (`explore ·`) come from a sub-agent.
 
 ---
 
@@ -186,7 +189,7 @@ Type any of these at the `>` prompt:
 ```bash
 # Save once — no env vars needed after this
 forge config set provider ollama
-forge config set model hf.co/bartowski/Qwen2.5-Coder-14B-Instruct-abliterated-GGUF:Q4_K_M
+forge config set model forge-deepseek
 
 # Check what's saved
 forge config get
@@ -270,6 +273,10 @@ Forge is one loop:
 
 **Status line** — after every turn, Forge prints: model name · open/closed · local/hosted · tokens used · cost · lines changed.
 
+**What the model starts with** — Forge's own rules, your project's instructions (the first of `FORGE.md`, `AGENTS.md` or `CLAUDE.md`), the [repo map](#repo-map), and, if [Engram](#engram-memory-integration) is running, up to 3 relevant memories before each message.
+
+**Tools** — `read`, `write`, `edit`, `glob`, `grep`, `bash`, `find_dependents`, `verify`, `web_search`, `web_fetch`, `recall`, `remember`, and `task` (sub-agents). Every one goes through the policy check before it runs.
+
 ---
 
 ## What works, what doesn't
@@ -294,13 +301,56 @@ Forge is one loop:
 - 13 providers: Anthropic, OpenAI, Gemini, xAI, Mistral, DeepSeek, OpenRouter, Groq, Together, Fireworks, Cerebras, Ollama, LM Studio — plus any OpenAI-compatible server
 - Works with local models for free, no API key needed
 
-**Current limitations vs Claude Code:**
-- Local models are capable but less reliable — may try several wrong commands before getting it right
+**Current limitations:**
+- Local models are capable but less reliable — they may try several wrong commands before getting it right
+- When a tool is blocked, a small local model may answer from memory as if it had run. Forge still prints the `⎿ … not allowed` line and logs the block, so what actually happened is always visible
 - No streaming output — you wait for the full response before seeing anything
-- No context compaction — long sessions will eventually hit the model's context limit
-- No MCP
-- The 32k context wrapper (`num_ctx` Modelfile) is a manual workaround, not built-in
+- No automatic context compaction — use `/compact` by hand before a long session hits the model's limit
+- No MCP support
+- Two `general` sub-agents running in parallel can edit the same file; use parallel tasks for separate files or read-only work
+- The 32k context wrapper (`num_ctx` Modelfile) is a manual step, not built in
 - Policy rules are the only thing protecting your filesystem — no sandbox isolation yet (planned for v2)
+
+---
+
+## How Forge compares
+
+Forge started as a one-shot planner and was rebuilt to work like Claude Code: a model in a loop with tools and a permission check before every call. [OpenClaude](https://github.com/Twigpine/openclaude), a community fork of Claude Code's codebase with many providers, was the checklist for the next round of features.
+
+| | Claude Code | OpenClaude | Forge |
+|---|---|---|---|
+| Agent loop with file, search and shell tools | Yes | Yes | Yes |
+| Permission check before every tool call | Yes | Yes | Yes — user-owned YAML, deny-by-default, every decision in a local audit log |
+| Network access as its own policy resource | — | — | Yes — per host, asks by default |
+| Open and local models | No | Yes | Yes |
+| Providers | Anthropic | 30+ | 13, plus any OpenAI-compatible server |
+| Open/closed and local/hosted shown on screen | — | — | Yes |
+| Web search and fetch | Yes | Yes | Yes |
+| Repo map | — | Yes | Yes |
+| Sub-agents | Yes | Yes | Yes — same policy, shared budget |
+| VS Code | Yes | Yes | Yes — terminal panel + ask about selection |
+| Headless server | — | gRPC | gRPC |
+| Long-term memory | — | — | Yes, with [Engram](https://github.com/TushaeBXN/engram) |
+| File undo | Yes | — | Yes |
+| Telemetry and circuit breaker | — | — | Yes |
+| Streaming output | Yes | Yes | No |
+| Automatic context compaction | Yes | — | No (`/compact` by hand) |
+| MCP | Yes | Yes | No |
+| Sandbox | Yes | — | No (v2) |
+
+A dash means I haven't confirmed it either way. Claude Code and OpenClaude are far larger projects; Forge's focus is the part they share least: an agent you can govern and audit, running on whatever model you choose.
+
+### What has been tested, and how
+
+| Feature | Tests | Run for real |
+|---|---|---|
+| Agent loop, policy, audit, undo | Yes | Yes, on `forge-deepseek` |
+| Web search and fetch | Yes, including a local server for redirects | Yes — live search, live fetch, and a deny rule blocking a host |
+| Repo map | Yes | Yes — answered a code question from the map alone |
+| Sub-agents | Yes, including two in parallel | Yes — `explore` found the right file and line |
+| gRPC server | Yes, over a real connection | Yes — `forge serve` + the example client |
+| 13 providers | Key handling and addresses | Each hosted address answered; **no real conversation yet** (needs each provider's key) |
+| VS Code extension | Yes, against a stand-in VS Code API; packages with `vsce` | **Not yet run in VS Code** |
 
 ---
 
@@ -523,7 +573,7 @@ agent/
 ├── subagents.ts         # the task tool, agent types, .forge/agents loader
 └── providers/
     ├── anthropic.ts     # Claude via Anthropic SDK
-    └── openai.ts        # OpenAI-compatible APIs (Ollama, LM Studio, Groq, Together)
+    └── openai.ts        # every OpenAI-compatible provider (OpenAI, Gemini, OpenRouter, Ollama, ...)
 
 tools/
 ├── files.ts             # read, write, edit (write/edit capture undo snapshots)
@@ -558,8 +608,26 @@ diff/semantic.ts         # semantic diff grouping
 ## Tests
 
 ```bash
-npm test
+npm test               # 163 tests
 ```
+
+| Suite | Tests | Covers |
+|---|---|---|
+| `loop` | 17 | Tool calls and results, deny / ask / approve, unattended refusals, cut-off replies, step and budget limits |
+| `check` | 18 | Path escapes, symlinks, chained commands, git rules, protected files |
+| `policy` | 13 | Rule matching, deny-by-default, approval rules |
+| `tools` | 20 | read, write, edit, glob, grep, bash, line counting |
+| `web` | 16 | Search parsing, HTML to text, redirects, binary refusal, network policy |
+| `subagents` | 8 | Agent files, read-only `explore`, policy and audit inside children, shared usage |
+| `repomap` | 6 | Definitions per language, ranking, budget |
+| `grpc` | 5 | A full turn over a real connection, approvals, token check |
+| `vscode` | 8 | Message formatting, every command, unsaved files |
+| `usage` | 14 | Model lookup, provider keys, status line, cost, budget |
+| `git-executor` | 19 | Branch names, protected branches, verification gate |
+| `diff` | 14 | Category grouping, blast radius |
+| `verify` | 5 | Stages, skip conditions |
+
+Tests never read your `~/.forgerc`, so they give the same result on any machine.
 
 ---
 
