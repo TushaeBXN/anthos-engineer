@@ -25,6 +25,7 @@ import path from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport, getDefaultEnvironment } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { CallToolResultSchema } from "@modelcontextprotocol/sdk/types.js";
 import type { Tool } from "./types.js";
 
 export interface McpServerConfig {
@@ -216,7 +217,13 @@ function wrapTool(server: string, tool: ListedTool, client: Client, taken: Set<s
     access: () => ({ kind: "mcp", server, tool: tool.name, readOnly }),
     label: () => `MCP ${server} · ${tool.name}`,
     async run(input) {
-      const result = await client.callTool({ name: tool.name, arguments: input }, undefined, { timeout: CALL_TIMEOUT_MS });
+      // Not client.callTool(): it fails any reply from a tool with an output schema that lacks structured
+      // content, which servers such as Xcode's `xcrun mcpbridge` send. Forge reads the text either way.
+      const result = await client.request(
+        { method: "tools/call", params: { name: tool.name, arguments: input } },
+        CallToolResultSchema,
+        { timeout: CALL_TIMEOUT_MS },
+      );
       return { output: resultText(result), isError: result.isError === true };
     },
   };

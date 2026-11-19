@@ -23,6 +23,33 @@ describe("definitions", () => {
     assert.deepEqual(names, ["runTurn", "Agent", "Tool", "Id", "tools", "helper"]);
   });
 
+  test("Swift: attributes and modifiers before the keyword; class func is a function; an extension's methods count, the extension itself doesn't", () => {
+    const names = definitions(
+      [
+        "import SwiftUI",
+        "@MainActor",
+        "public final class AppModel: ObservableObject {",
+        "  @Published var count = 0",
+        "  public static func shared() -> AppModel { AppModel() }",
+        "  class func make() -> AppModel { AppModel() }",
+        "  private mutating func reset() {}",
+        "}",
+        "struct ContentView: View { var body: some View { Text(\"hi\") } }",
+        "protocol Store {",
+        "  func save()",
+        "}",
+        "actor Cache {}",
+        "enum Mode { case light, dark }",
+        "extension AppModel {",
+        "  func extra() {}",
+        "}",
+        "typealias ID = String",
+      ].join("\n"),
+      "swift",
+    );
+    assert.deepEqual(names, ["AppModel", "shared", "make", "reset", "ContentView", "Store", "save", "Cache", "Mode", "extra", "ID"]);
+  });
+
   test("Python, Go and Rust", () => {
     assert.deepEqual(definitions("class Store:\n    def get(self): pass\ndef load_all():\n    pass", "py"), ["Store", "load_all"]);
     assert.deepEqual(definitions("func (s *Server) Start() {}\ntype Config struct {}", "go"), ["Start", "Config"]);

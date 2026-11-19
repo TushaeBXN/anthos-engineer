@@ -7,7 +7,7 @@
  *   3. PageRank over those pointers: files many others depend on rank first.
  *   4. Print files and their names, best first, until the budget is spent.
  *
- * Works on any language with a regex below; no index or `forge init` needed.
+ * Works on any language with a regex below (TS/JS, Python, Go, Rust, Java/Kotlin/C#, Ruby, Swift); no index or `forge init` needed.
  */
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
@@ -29,11 +29,15 @@ const DEFINITIONS: Record<string, RegExp[]> = {
   rs: [/^\s*(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?(?:fn|struct|enum|trait|type|mod)\s+([A-Za-z_]\w*)/gm],
   java: [/^\s*(?:public|protected|private|abstract|final|static|sealed|data|open|\s)*(?:class|interface|enum|record|object)\s+([A-Za-z_]\w*)/gm],
   rb: [/^\s*(?:def\s+(?:self\.)?|class\s+|module\s+)([A-Za-z_]\w*[?!]?)/gm],
+  // Attributes (@MainActor) and modifiers (public, static, …) may come first; `class func` is a function.
+  swift: [
+    /^\s*(?:@\w+(?:\([^)]*\))?\s+)*(?:(?:public|private|internal|fileprivate|open|package|static|final|override|mutating|nonmutating|nonisolated|convenience|required|indirect|class)\s+)*(?:func|class|struct|enum|protocol|actor|typealias)\s+([A-Za-z_]\w*)/gm,
+  ],
 };
 
 const LANGUAGE: Record<string, keyof typeof DEFINITIONS> = {
   ".ts": "ts", ".tsx": "ts", ".mts": "ts", ".cts": "ts", ".js": "ts", ".jsx": "ts", ".mjs": "ts", ".cjs": "ts",
-  ".py": "py", ".go": "go", ".rs": "rs", ".java": "java", ".kt": "java", ".cs": "java", ".scala": "java", ".rb": "rb",
+  ".py": "py", ".go": "go", ".rs": "rs", ".java": "java", ".kt": "java", ".cs": "java", ".scala": "java", ".rb": "rb", ".swift": "swift",
 };
 
 const IGNORE = ["**/node_modules/**", "**/dist/**", "**/build/**", "**/.git/**", "**/.forge/**", "**/vendor/**", "**/target/**", "**/*.d.ts", "**/*.min.js"];

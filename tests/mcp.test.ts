@@ -84,6 +84,17 @@ describe("MCP — your own servers", () => {
   });
 });
 
+describe("MCP — servers that declare an output schema but reply in plain text (like Xcode's bridge)", () => {
+  test("the reply's text is used instead of failing the call", async () => {
+    const schemaServer = { command: SERVER.command, args: [path.join(root, "tests/fixtures/mcp-schema-server.ts")] };
+    writeJson(path.join(home, "mcp.json"), { mcpServers: { xcode: schemaServer } });
+    await withConnection(connectMcp(cwd), async (mcp) => {
+      const build = mcp.tools.find((t) => t.name === "mcp__xcode__BuildProject")!;
+      assert.deepEqual(await build.run({}, cwd), { output: '{"status":"Build succeeded"}', isError: false });
+    });
+  });
+});
+
 describe("MCP — a project's servers need trust", () => {
   test("with no one to ask, an untrusted project server is skipped", async () => {
     writeJson(path.join(cwd, ".forge/mcp.json"), { mcpServers: { calc: SERVER } });

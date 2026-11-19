@@ -360,6 +360,7 @@ A dash means I haven't confirmed it either way. Claude Code and OpenClaude are f
 | VS Code extension | Yes, against a stand-in VS Code API; packages with `vsce` | **Not yet run in VS Code** |
 | Context compaction | Yes — trigger, carry-over, both providers' summary requests, fallback | Yes on `forge-deepseek`: compacted once mid-task (7.8k → 1.7k) and still answered correctly |
 | Streaming | Yes — local servers speaking the OpenAI and Anthropic stream formats | Yes on `forge-deepseek`: a reply arrived in 77 pieces over 6 s, and a turn with a tool call streamed too. **Anthropic not yet run live** (no key here) |
+| Xcode (through MCP) | Yes, against a server that replies the way Xcode's bridge does | **Not yet run with real Xcode** |
 | MCP | Yes, against a real MCP server (`tests/fixtures/mcp-server.ts`) | Yes — `forge-deepseek` used a server's tool; a tool with no rule was refused |
 
 ---
@@ -504,6 +505,38 @@ Tools the server marks read-only run in parallel; all others run one at a time.
 
 MCP tools return text written by whoever runs the server. Treat it like any web page: it can contain instructions aimed at the model, which is one more reason the policy, not the model, decides what runs.
 
+### Xcode
+
+Since Xcode 26.3, Apple ships an MCP server for outside coding agents, `xcrun mcpbridge`. It gives Forge Xcode's own tools: reading the project, building, running tests and rendering SwiftUI previews (about 20 tools, such as `BuildProject`, `RunTests` and `RenderPreview`). Add it to `~/.forge/mcp.json`:
+
+```json
+{ "mcpServers": { "xcode": { "command": "xcrun", "args": ["mcpbridge"] } } }
+```
+
+Then:
+
+1. Turn on the MCP server in Xcode's settings.
+2. Open your project in Xcode. The bridge talks to the running Xcode, so the project must be open, not just an empty window.
+3. Run Forge in Terminal, in the project's folder. `/mcp` should list the Xcode tools.
+
+Allow what you're happy to run without asking, such as builds and tests, and leave the rest on "ask":
+
+```yaml
+  - id: xcode-build-and-test
+    resource: mcp
+    operation: BuildProject
+    target: xcode
+    effect: allow
+```
+
+`operation` is an exact tool name; `/mcp` lists the bridge's tool names. The [repo map](#repo-map) reads Swift, so Forge knows your types and functions from the start. The [project index](#project-index) covers TypeScript only.
+
+Xcode's bridge is reported to declare output schemas for its tools and then reply in plain text, which the MCP SDK's normal call rejects. Forge reads the reply's text either way, and a test server that behaves like this is in the test suite.
+
+**Not yet tried with real Xcode.** The setup above follows Apple's bridge as other agents (Claude Code, Codex, Cursor) use it, and Forge passes its tests against a server that behaves the same way. If something doesn't work, please open an issue.
+
+Forge can't be used *inside* Xcode's own AI panel. That panel takes a model, not an agent: to use a local model there, point Xcode at Ollama directly.
+
 ---
 
 ## gRPC server
@@ -633,7 +666,7 @@ When Forge starts, it builds a short map of the project and puts it in the model
 
 How it ranks files:
 
-1. Find the names each source file defines (functions, classes, types) — TypeScript/JavaScript, Python, Go, Rust, Java/Kotlin/C#, Ruby.
+1. Find the names each source file defines (functions, classes, types) — TypeScript/JavaScript, Python, Go, Rust, Java/Kotlin/C#, Ruby, Swift.
 2. A file that uses a name defined in another file points at that file.
 3. PageRank over those links: files that many others depend on come first. Tests go last.
 4. Files and their names are listed, best first, until the token budget is spent.
@@ -745,7 +778,7 @@ diff/semantic.ts         # semantic diff grouping
 ## Tests
 
 ```bash
-npm test               # 196 tests
+npm test               # 198 tests
 ```
 
 `npm audit` reports no known vulnerabilities in Forge's dependencies (as of 2026-11-18). This matters more than usual for an agent: the `glob` tool passes model-written patterns to `glob` and `minimatch`, so a denial-of-service bug in either could let text the model has read hang Forge.
@@ -758,11 +791,11 @@ npm test               # 196 tests
 | `tools` | 20 | read, write, edit, glob, grep, bash, line counting |
 | `web` | 16 | Search parsing, HTML to text, redirects, binary refusal, network policy |
 | `subagents` | 8 | Agent files, read-only `explore`, policy and audit inside children, shared usage |
-| `repomap` | 6 | Definitions per language, ranking, budget |
+| `repomap` | 7 | Definitions per language (Swift included), ranking, budget |
 | `streaming` | 9 | Both providers' stream formats, tool calls rebuilt from pieces, usage, tool input checks |
 | `compaction` | 11 | When to compact, no repeat compacting, what's carried over, mid-task with pending tool results, both providers' summary requests, the fallback |
 | `grpc` | 5 | A full turn over a real connection, streamed text, approvals, token check |
-| `mcp` | 8 | A real MCP server: calls, errors, policy, project trust, a server that fails to start |
+| `mcp` | 9 | A real MCP server: calls, errors, policy, project trust, a server that fails to start, replies like Xcode's bridge |
 | `extractor` | 4 | The project indexer: functions and methods, calls across files, constructors, interfaces, never library files |
 | `vscode` | 8 | Message formatting, every command, unsaved files |
 | `usage` | 14 | Model lookup, provider keys, status line, cost, budget |
