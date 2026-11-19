@@ -1,4 +1,4 @@
-import { Project, SyntaxKind } from "ts-morph";
+import { Node, Project, SyntaxKind } from "ts-morph";
 import path from "node:path";
 import type { SystemNode, SystemEdge } from "../schema.js";
 import type { Extractor, ExtractionResult } from "../extractor.js";
@@ -17,6 +17,16 @@ function depId(specifier: string): string {
 
 function edgeId(fromId: string, kind: string, toId: string): string {
   return `${fromId}->${kind}->${toId}`;
+}
+
+/** The name of a declaration the index records as a function (top level only), or null. */
+function indexedFunctionName(decl: Node): string | null {
+  if (Node.isFunctionDeclaration(decl) && Node.isSourceFile(decl.getParent())) return decl.getName() ?? null;
+  if (Node.isVariableDeclaration(decl) && Node.isSourceFile(decl.getVariableStatement()?.getParent())) {
+    const init = decl.getInitializer();
+    if (init?.isKind(SyntaxKind.ArrowFunction) || init?.isKind(SyntaxKind.FunctionExpression)) return decl.getName();
+  }
+  return null;
 }
 
 export class TypeScriptExtractor implements Extractor {
@@ -157,7 +167,7 @@ export class TypeScriptExtractor implements Extractor {
       });
     }
 
-    // ── Call edges (best-effort, within this file) ──
+    // ── Call edges: within this file, and to functions in other project files ──
     for (const fnNode of fnNodes) {
       const decl =
         sf.getFunction(fnNode.name) ??
@@ -191,9 +201,10 @@ export class TypeScriptExtractor implements Extractor {
           continue;
         }
 
-        // Try to resolve via ts-morph type checker
+        // Resolve through the type checker, following imports to where the function is defined.
         try {
-          const sym = expr.getSymbol();
+          let sym = expr.getSymbol();
+          if (sym?.isAlias()) sym = sym.getAliasedSymbol() ?? sym;
           const decls = sym?.getDeclarations() ?? [];
           for (const d of decls) {
             const sf2 = d.getSourceFile();
@@ -203,7 +214,10 @@ export class TypeScriptExtractor implements Extractor {
             if (sf2.isDeclarationFile() || sf2.isInNodeModules()) continue;
             const targetPath = path.relative(process.cwd(), sf2.getFilePath());
             if (targetPath.startsWith("..") || path.isAbsolute(targetPath)) continue;
-            const targetId = functionId(targetPath, calleeName);
+            // Link only to functions the index has; use the defined name, so `import { a as b }` links to a.
+            const definedName = indexedFunctionName(d);
+            if (!definedName) continue;
+            const targetId = functionId(targetPath, definedName);
             const eid = edgeId(fnNode.id, "calls", targetId);
             if (!edges.find((e) => e.id === eid)) {
               edges.push({

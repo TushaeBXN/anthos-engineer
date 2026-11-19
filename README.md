@@ -686,7 +686,7 @@ npm test               # 172 tests
 | `repomap` | 6 | Definitions per language, ranking, budget |
 | `grpc` | 5 | A full turn over a real connection, approvals, token check |
 | `mcp` | 8 | A real MCP server: calls, errors, policy, project trust, a server that fails to start |
-| `extractor` | 1 | The project indexer links your own code, never library files |
+| `extractor` | 1 | The project indexer: imports, calls across files (including renamed and namespace imports), never library files |
 | `vscode` | 8 | Message formatting, every command, unsaved files |
 | `usage` | 14 | Model lookup, provider keys, status line, cost, budget |
 | `git-executor` | 19 | Branch names, protected branches, verification gate |
