@@ -818,6 +818,6 @@ MIT — Brian Tushae Thomas / Anthos Intelligence
 
 ### Origins
 
-Forge's code was written for Forge; it is not built on another project's code. Some pieces were implemented from ideas seen in other tools, such as Claude Code, OpenClaude and Cloudroom, which are compared [above](#how-forge-compares).
+Forge started as **Anthos Engineer** and was later renamed Forge, which is why the repository is still called `anthos-engineer`. Its code was written for it; it is not built on another project's code. Some pieces were implemented from ideas seen in other tools, such as Claude Code, OpenClaude and Cloudroom, which are compared [above](#how-forge-compares).
 
 This repository's early git history contains commits from [Free Claude Code](https://github.com/Alishahryar1/free-claude-code) by Ali Khokhar (MIT), which is why his name appears in the log. None of that code is in the current files.
