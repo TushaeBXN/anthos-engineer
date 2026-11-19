@@ -198,7 +198,11 @@ export class TypeScriptExtractor implements Extractor {
           for (const d of decls) {
             const sf2 = d.getSourceFile();
             if (sf2.getFilePath() === absPath) continue;
+            // Only calls into the project's own code. Newer TypeScript also resolves calls
+            // like path.join into library type files, which are not part of the project.
+            if (sf2.isDeclarationFile() || sf2.isInNodeModules()) continue;
             const targetPath = path.relative(process.cwd(), sf2.getFilePath());
+            if (targetPath.startsWith("..") || path.isAbsolute(targetPath)) continue;
             const targetId = functionId(targetPath, calleeName);
             const eid = edgeId(fnNode.id, "calls", targetId);
             if (!edges.find((e) => e.id === eid)) {
