@@ -22,7 +22,14 @@ function scriptedAgent(cwd: string, io: AgentIO): Agent {
   const replies = [wants(call("1", "bash", { command: "echo approved-ran" })), says("All done.")];
   const alwaysAllowed = new Set<string>();
   return {
-    session: { send: async () => replies.shift()! },
+    session: {
+      // The final answer streams in two pieces, as a real model's would.
+      async send(_input, onText) {
+        const reply = replies.shift()!;
+        if (reply.text) for (const piece of ["All ", "done."]) onText?.(piece);
+        return reply;
+      },
+    },
     tools,
     policy: { version: 1, default: "deny", rules: [] },
     usage: new UsageTracker(resolveModel({})),
@@ -78,10 +85,12 @@ describe("gRPC server", () => {
     });
   }
 
-  test("a turn streams ready, the approval request, tool activity and the final answer", async () => {
+  test("a turn streams ready, the approval request, tool activity, the answer as it is written, and the final answer", async () => {
     const { events } = await turn(true);
     const kinds = events.map((e) => e.kind).filter((k) => k !== "working");
-    assert.deepEqual(kinds, ["ready", "approvalRequest", "activity", "text", "turnDone"]);
+    assert.deepEqual(kinds, ["ready", "approvalRequest", "activity", "textDelta", "textDelta", "text", "turnDone"]);
+    assert.deepEqual(events.filter((e) => e.kind === "textDelta").map((e) => e.textDelta!.text), ["All ", "done."]);
+    assert.equal(events.find((e) => e.kind === "text")!.text!.text, "All done.");
     assert.equal(events.find((e) => e.kind === "approvalRequest")!.approvalRequest!.label, "Run echo approved-ran");
     assert.deepEqual(events.find((e) => e.kind === "activity")!.activity, { label: "Run echo approved-ran", detail: "", failed: false });
     const done = events.find((e) => e.kind === "turnDone")!.turnDone!;

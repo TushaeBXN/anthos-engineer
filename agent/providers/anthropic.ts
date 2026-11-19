@@ -1,4 +1,4 @@
-/** Talks to Claude through the Anthropic SDK. */
+/** Talks to Claude through the Anthropic SDK. Replies are streamed, so text can be shown as it is written. */
 import Anthropic from "@anthropic-ai/sdk";
 import type { Reply, Session, ToolResult, ToolSpec } from "../types.js";
 
@@ -24,24 +24,39 @@ export function anthropicSession(model: string, system: string, tools: ToolSpec[
     name: tool.name,
     description: tool.description,
     input_schema: tool.inputSchema,
+    // Stream tool inputs as they are written: a file body otherwise arrives in one burst after a long silence.
+    // The API then no longer validates them, so the loop checks every input against the tool's schema.
+    eager_input_streaming: true,
   }));
 
   return {
-    async send(input: string | ToolResult[]): Promise<Reply> {
+    async send(input: string | ToolResult[], onText?: (delta: string) => void): Promise<Reply> {
       messages.push({ role: "user", content: typeof input === "string" ? input : input.map(toResultBlock) });
 
-      const response = await client.beta.messages.create({
-        model,
-        max_tokens: 16000,
-        system,
-        tools: apiTools,
-        messages,
-        // Reuse the unchanged start of the conversation instead of paying for it again.
-        cache_control: { type: "ephemeral" },
-        ...(HAS_FALLBACK.has(model)
-          ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const }
-          : {}),
-      });
+      let response: Anthropic.Beta.BetaMessage;
+      for (let attempt = 0; ; attempt++) {
+        const stream = client.beta.messages.stream({
+          model,
+          max_tokens: 16000,
+          system,
+          tools: apiTools,
+          messages,
+          // Reuse the unchanged start of the conversation instead of paying for it again.
+          cache_control: { type: "ephemeral" },
+          ...(HAS_FALLBACK.has(model)
+            ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const }
+            : {}),
+        });
+        if (onText) stream.on("text", (delta) => onText(delta));
+        try {
+          response = await stream.finalMessage();
+          break;
+        } catch (err) {
+          // A tool input that streamed as unparseable JSON fails here; ask again, twice at most.
+          // API errors (auth, rate limits, bad requests) are not retried.
+          if (err instanceof Anthropic.APIError || attempt >= 2) throw err;
+        }
+      }
 
       // Keep the reply exactly as it came, thinking blocks included: the API
       // needs them back unchanged on the next request.

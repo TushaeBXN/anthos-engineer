@@ -30,6 +30,7 @@ const client = new Forge(`127.0.0.1:${port}`, grpc.credentials.createInsecure())
 const metadata = new grpc.Metadata();
 if (process.env["FORGE_GRPC_TOKEN"]) metadata.set("authorization", `Bearer ${process.env["FORGE_GRPC_TOKEN"]}`);
 
+let streamed = false;
 const stream = (client as unknown as { Session(m: grpc.Metadata): grpc.ClientDuplexStream<unknown, Event> }).Session(metadata);
 
 stream.on("data", async (e: Event) => {
@@ -41,8 +42,15 @@ stream.on("data", async (e: Event) => {
     case "activity":
       console.log(`[tool] ${e.activity!.label}${e.activity!.detail ? `  ${e.activity!.detail}` : ""}`);
       break;
+    case "textDelta":
+      // Shown as it arrives; the full reply follows as "text".
+      process.stdout.write(String(e.textDelta!.text));
+      streamed = true;
+      break;
     case "text":
-      console.log(`\n${e.text!.text}\n`);
+      if (streamed) process.stdout.write("\n\n");
+      else console.log(`\n${e.text!.text}\n`);
+      streamed = false;
       break;
     case "note":
       console.log(`[note] ${e.note!.text}`);

@@ -20,11 +20,12 @@ Requires Node.js 22+. Choose a model once with `npx tsx cli/index.ts config set 
 - **Every tool call goes through `check()` in the loop.** Tools do not check policy themselves, and nothing runs a tool except the loop.
 - **A tool is one object in `tools/`**: a description, an input schema, `access()` (what it touches, for the policy), `label()` (one line for the screen) and `run()`. Add it to `tools/index.ts`.
 - **Providers translate, nothing more.** `agent/providers/*` turn the shared types in `agent/types.ts` into one API's format and back. The loop and tools never import an SDK.
-- **Everything printed goes through a `Screen`.** In the terminal that is `agent/ui.ts` (one header panel at startup, `⎿` lines for tool calls, a spinner while working, a status line after each turn). The gRPC server and sub-agents supply their own `Screen`; nothing else writes to the console during a turn.
+- **Everything printed goes through a `Screen`.** In the terminal that is `agent/ui.ts` (one header panel at startup, `⎿` lines for tool calls, a spinner while working, a status line after each turn). The gRPC server and sub-agents supply their own `Screen`; nothing else writes to the console during a turn. A `Screen` with `stream()` gets the reply as it is written, then `endStream()`; one without it gets `say()` once.
 - **Model facts live in `agent/models.ts`**: open or closed, local or hosted, context size, price. Do not guess a price; leave it out.
 - **Anything that leaves the machine is `{ kind: "network" }` access**, checked per host. No tool fetches a URL without going through the policy.
 - **Each provider reads only its own key** (`keyEnv` in `agent/models.ts`). Never fall back to another provider's key.
 - **Sub-agents are agents, not shortcuts.** They run `runTurn` with the parent's policy, approver and audit; they never get the `task` tool.
+- **Every tool input is checked against its schema (`checkInput` in `agent/loop.ts`) before the policy check.** Streamed tool inputs are not validated by the provider.
 - **When no one can answer an "ask", the answer is no**, and the audit log says so truthfully.
 - **MCP tools are `{ kind: "mcp" }` access.** A project's servers start only after the person trusts them; nothing writes to `.forge/`.
 - **Nothing writes to the dependency graph directly.** Changes go through an event in `model/events.ts`; `model/graph.ts` applies events.

@@ -94,7 +94,7 @@ That's a lot of safety machinery for a coding agent. It's intentional.
 
 The biggest remaining gap is that the shell check reads command text — it is not a sandbox. A command you approve can do anything your user account can. The right fix is to run each session in an isolated container, the way tools like [Cloudroom](https://github.com/davidondrej/cloudroom) do: the model works inside a VM, sees a copy of your project, and changes only come back to your machine after you review a diff. That's the v2 target.
 
-Beyond that: streaming output so you see the model think in real time, automatic context compaction so long sessions don't hit the token limit, and tighter tool-calling support for more local models.
+Beyond that: automatic context compaction so long sessions don't hit the token limit, and tighter tool-calling support for more local models.
 
 ---
 
@@ -272,6 +272,8 @@ Forge is one loop:
 
 **File undo** — every write and edit is snapshotted before it happens. Use `/undo` to restore, `/history` to see what's changed.
 
+**Streaming** — the model's reply appears as it is written, in the terminal and over gRPC, with every provider. Tool inputs are checked against each tool's schema before they run (required fields, types, allowed values), since streamed inputs aren't validated by the provider.
+
 **Status line** — after every turn, Forge prints: model name · open/closed · local/hosted · tokens used · cost · lines changed.
 
 **What the model starts with** — Forge's own rules, your project's instructions (the first of `FORGE.md`, `AGENTS.md` or `CLAUDE.md`), the [repo map](#repo-map), and, if [Engram](#engram-memory-integration) is running, up to 3 relevant memories before each message.
@@ -300,14 +302,13 @@ Forge is one loop:
 - MCP — tools from any MCP server, checked by the policy like Forge's own; a project's servers need your OK before they start
 - 24 slash commands
 - Persistent config via `~/.forgerc` — no env vars every session
-- Claude Code-style terminal UI (panel header, braille spinner, `⎿` hooks)
+- Claude Code-style terminal UI (panel header, braille spinner, `⎿` hooks), with replies streamed as they are written
 - 13 providers: Anthropic, OpenAI, Gemini, xAI, Mistral, DeepSeek, OpenRouter, Groq, Together, Fireworks, Cerebras, Ollama, LM Studio — plus any OpenAI-compatible server
 - Works with local models for free, no API key needed
 
 **Current limitations:**
 - Local models are capable but less reliable — they may try several wrong commands before getting it right
 - When a tool is blocked, a small local model may answer from memory as if it had run. Forge still prints the `⎿ … not allowed` line and logs the block, so what actually happened is always visible
-- No streaming output — you wait for the full response before seeing anything
 - No automatic context compaction — use `/compact` by hand before a long session hits the model's limit
 - Two `general` sub-agents running in parallel can edit the same file; use parallel tasks for separate files or read-only work
 - The 32k context wrapper (`num_ctx` Modelfile) is a manual step, not built in
@@ -335,7 +336,7 @@ Forge started as a one-shot planner and was rebuilt to work like Claude Code: a 
 | Long-term memory | — | — | Yes, with [Engram](https://github.com/TushaeBXN/engram) |
 | File undo | Yes | — | Yes |
 | Telemetry and circuit breaker | — | — | Yes |
-| Streaming output | Yes | Yes | No |
+| Streaming output | Yes | Yes | Yes — terminal and gRPC |
 | Automatic context compaction | Yes | — | No (`/compact` by hand) |
 | MCP | Yes | Yes | Yes — every MCP tool call goes through the policy; a project's servers need your OK |
 | Sandbox | Yes | — | No (v2) |
@@ -354,6 +355,7 @@ A dash means I haven't confirmed it either way. Claude Code and OpenClaude are f
 | gRPC server | Yes, over a real connection | Yes — `forge serve` + the example client |
 | 13 providers | Key handling and addresses | Each hosted address answered; **no real conversation yet** (needs each provider's key) |
 | VS Code extension | Yes, against a stand-in VS Code API; packages with `vsce` | **Not yet run in VS Code** |
+| Streaming | Yes — local servers speaking the OpenAI and Anthropic stream formats | Yes on `forge-deepseek`: a reply arrived in 77 pieces over 6 s, and a turn with a tool call streamed too. **Anthropic not yet run live** (no key here) |
 | MCP | Yes, against a real MCP server (`tests/fixtures/mcp-server.ts`) | Yes — `forge-deepseek` used a server's tool; a tool with no rule was refused |
 
 ---
@@ -507,11 +509,11 @@ MCP tools return text written by whoever runs the server. Treat it like any web 
 | Client sends | Server streams back |
 |---|---|
 | `Start { cwd }` once | `Ready { model, status }` |
-| `UserMessage { text }` for each turn | `Text`, `Activity` (each tool call), `Note`, `Working` |
+| `UserMessage { text }` for each turn | `TextDelta` (the reply as it is written), `Text` (the whole reply), `Activity` (each tool call), `Note`, `Working` |
 | `Approval { id, approved, always }` | `ApprovalRequest { id, label, reason }` when the policy says "ask" |
 | | `TurnDone { text, status }` at the end of each turn, or `Error { message }` |
 
-It's the same agent as the terminal: policy, audit log, sub-agents, budget and memory all work unchanged. When the policy says "ask", the client receives an `ApprovalRequest` and the turn waits for its answer. If the client disconnects, every open question is answered no.
+`TextDelta` events carry the reply piece by piece for live display; the complete reply always follows as one `Text`, so a client that doesn't want streaming can ignore `TextDelta`. It's the same agent as the terminal: policy, audit log, sub-agents, budget and memory all work unchanged. When the policy says "ask", the client receives an `ApprovalRequest` and the turn waits for its answer. If the client disconnects, every open question is answered no.
 
 ```bash
 forge serve --port 50051
@@ -711,7 +713,7 @@ diff/semantic.ts         # semantic diff grouping
 ## Tests
 
 ```bash
-npm test               # 175 tests
+npm test               # 184 tests
 ```
 
 `npm audit` reports no known vulnerabilities in Forge's dependencies (as of 2026-11-18). This matters more than usual for an agent: the `glob` tool passes model-written patterns to `glob` and `minimatch`, so a denial-of-service bug in either could let text the model has read hang Forge.
@@ -725,7 +727,8 @@ npm test               # 175 tests
 | `web` | 16 | Search parsing, HTML to text, redirects, binary refusal, network policy |
 | `subagents` | 8 | Agent files, read-only `explore`, policy and audit inside children, shared usage |
 | `repomap` | 6 | Definitions per language, ranking, budget |
-| `grpc` | 5 | A full turn over a real connection, approvals, token check |
+| `streaming` | 9 | Both providers' stream formats, tool calls rebuilt from pieces, usage, tool input checks |
+| `grpc` | 5 | A full turn over a real connection, streamed text, approvals, token check |
 | `mcp` | 8 | A real MCP server: calls, errors, policy, project trust, a server that fails to start |
 | `extractor` | 4 | The project indexer: functions and methods, calls across files, constructors, interfaces, never library files |
 | `vscode` | 8 | Message formatting, every command, unsaved files |

@@ -46,6 +46,7 @@ message ServerEvent {
     ApprovalRequest approval_request = 6;
     TurnDone turn_done = 7;
     Error error = 8;
+    TextDelta text_delta = 9;
   }
 }
 
@@ -55,8 +56,14 @@ message Ready {
   string status = 2;
 }
 
-// The model's text.
+// The model's whole reply. Sent once per reply, after any TextDelta pieces.
 message Text {
+  string text = 1;
+}
+
+// A piece of the model's reply as it is being written, for live display.
+// The complete reply still follows as Text, so a client can ignore these.
+message TextDelta {
   string text = 1;
 }
 

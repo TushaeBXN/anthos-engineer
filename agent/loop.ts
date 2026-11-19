@@ -10,7 +10,7 @@
  */
 import { check, humanDecision, type Access, type Verdict, type Who } from "../policy/check.js";
 import type { ForgePolicy, PolicyDecisionRecord } from "../policy/schema.js";
-import type { Session, Tool, ToolCall, ToolResult } from "./types.js";
+import type { Reply, Session, Tool, ToolCall, ToolResult, ToolSpec } from "./types.js";
 import type { Screen } from "./ui.js";
 import type { UsageTracker } from "./usage.js";
 import { telemetry } from "./telemetry.js";
@@ -72,10 +72,29 @@ export async function runTurn(message: string, agent: Agent): Promise<string> {
       return "";
     }
 
+    // Text is shown as the model writes it when the screen can stream; otherwise all at once.
     agent.screen.working(true);
-    const reply = await agent.session.send(input).finally(() => agent.screen.working(false));
+    let streamed = false;
+    const stream = agent.screen.stream?.bind(agent.screen);
+    const onText = stream
+      ? (delta: string) => {
+          if (!streamed) {
+            streamed = true;
+            agent.screen.working(false);
+          }
+          stream(delta);
+        }
+      : undefined;
+    let reply: Reply;
+    try {
+      reply = await agent.session.send(input, onText);
+    } finally {
+      agent.screen.working(false);
+      // A reply that broke off mid-stream still has its line ended.
+      if (streamed) agent.screen.endStream?.(reply! ? reply.text : "");
+    }
     agent.usage.addReply(reply.usage);
-    if (reply.text) agent.screen.say(reply.text);
+    if (!streamed && reply.text) agent.screen.say(reply.text);
 
     if (reply.stopped === "refused") {
       agent.screen.note("The model declined this request.");
@@ -133,8 +152,8 @@ async function runTool(call: ToolCall, agent: Agent): Promise<ToolResult> {
   const tool = agent.tools.find((t) => t.name === call.name);
   if (!tool) return failed(call, `There is no tool named "${call.name}".`);
 
-  const missing = tool.inputSchema.required.filter((key) => call.input[key] === undefined);
-  if (missing.length > 0) return failed(call, `Missing required input: ${missing.join(", ")}.`);
+  const problem = checkInput(tool.inputSchema, call.input);
+  if (problem) return failed(call, `${problem} Call ${tool.name} again with corrected input.`);
 
   const label = tool.label(call.input);
   const access = tool.access(call.input);
@@ -189,6 +208,41 @@ async function runTool(call: ToolCall, agent: Agent): Promise<ToolResult> {
     telemetry.record(call.name, false, Date.now() - t0, (err as Error).message);
     agent.screen.activity(label, "failed", true);
     return failed(call, (err as Error).message);
+  }
+}
+
+/**
+ * Check a tool's input against its schema before it runs: required fields, top-level types and
+ * allowed values. Models, small local ones especially, send wrong types, and streamed tool inputs
+ * are not validated by the provider. Returns what is wrong, or null.
+ */
+export function checkInput(schema: ToolSpec["inputSchema"], input: Record<string, unknown>): string | null {
+  const missing = schema.required.filter((key) => input[key] === undefined);
+  if (missing.length > 0) return `Missing required input: ${missing.join(", ")}.`;
+  for (const [key, value] of Object.entries(input)) {
+    const spec = schema.properties[key];
+    if (!spec || value === undefined) continue;
+    const types = spec.type === undefined ? [] : Array.isArray(spec.type) ? spec.type : [spec.type];
+    if (types.length > 0 && !types.some((t) => matchesType(value, t))) {
+      return `Input "${key}" should be ${types.join(" or ")}, not ${value === null ? "null" : Array.isArray(value) ? "array" : typeof value}.`;
+    }
+    if (Array.isArray(spec["enum"]) && !(spec["enum"] as unknown[]).includes(value)) {
+      return `Input "${key}" must be one of: ${(spec["enum"] as unknown[]).map((v) => JSON.stringify(v)).join(", ")}.`;
+    }
+  }
+  return null;
+}
+
+function matchesType(value: unknown, type: string): boolean {
+  switch (type) {
+    case "string": return typeof value === "string";
+    case "number": return typeof value === "number" && Number.isFinite(value);
+    case "integer": return Number.isInteger(value);
+    case "boolean": return typeof value === "boolean";
+    case "array": return Array.isArray(value);
+    case "object": return value !== null && typeof value === "object" && !Array.isArray(value);
+    case "null": return value === null;
+    default: return true;
   }
 }
 

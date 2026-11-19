@@ -38,7 +38,8 @@ export interface Reply {
 
 /** A conversation with one model. It keeps its own message history. */
 export interface Session {
-  send(input: string | ToolResult[]): Promise<Reply>;
+  /** onText, when given, receives the reply's text piece by piece as the model writes it. */
+  send(input: string | ToolResult[], onText?: (delta: string) => void): Promise<Reply>;
 }
 
 /** What the model is told about a tool. */

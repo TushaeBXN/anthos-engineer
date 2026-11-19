@@ -24,6 +24,10 @@ import type { UsageTracker } from "./usage.js";
 
 export interface Screen {
   say(text: string): void;
+  /** The model's text, a piece at a time as it is written. Screens without it get say() once instead. */
+  stream?(delta: string): void;
+  /** The streamed reply is finished; text is all of it. */
+  endStream?(text: string): void;
   activity(label: string, detail?: string, failed?: boolean): void;
   note(text: string): void;
   working(on: boolean): void;
@@ -94,9 +98,32 @@ export function printHeader(statusLine: string): void {
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
+// Whether the current reply has started printing, and how it ended, so streamed text is laid out like say().
+let streamStarted = false;
+let lastStreamed = "";
+
 export const terminal: Screen = {
   say(text) {
     console.log(`\n${text.trim()}\n`);
+  },
+
+  stream(delta) {
+    let out = delta;
+    if (!streamStarted) {
+      out = out.replace(/^\s+/, "");
+      if (!out) return;
+      streamStarted = true;
+      process.stdout.write("\n");
+    }
+    process.stdout.write(out);
+    lastStreamed = out;
+  },
+
+  endStream() {
+    if (!streamStarted) return;
+    process.stdout.write(lastStreamed.endsWith("\n") ? "\n" : "\n\n");
+    streamStarted = false;
+    lastStreamed = "";
   },
 
   activity(label, detail, failed) {

@@ -107,6 +107,8 @@ function session(call: grpc.ServerDuplexStream<ClientMessage, Event>, options: S
   const io: AgentIO = {
     screen: {
       say: (text) => send({ text: { text } }),
+      stream: (delta) => send({ textDelta: { text: delta } }),
+      endStream: (text) => send({ text: { text } }),
       activity: (label, detail, failed) => send({ activity: { label, detail: detail ?? "", failed: Boolean(failed) } }),
       note: (text) => send({ note: { text } }),
       working: (on) => send({ working: { on } }),
