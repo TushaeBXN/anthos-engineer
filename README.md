@@ -816,6 +816,8 @@ Tests never read your `~/.forgerc`, so they give the same result on any machine.
 
 MIT — Brian Tushae Thomas / Anthos Intelligence
 
-### Acknowledgment
+### Origins
 
-This repository began as a copy of [Free Claude Code](https://github.com/Alishahryar1/free-claude-code) by Ali Khokhar, an MIT-licensed proxy that lets Claude Code use other model providers. Forge has since been rewritten from scratch and none of that code remains in the current files, but its history is still in this repository's git log. Thanks to Ali Khokhar and its contributors for the starting point.
+Forge's code was written for Forge; it is not built on another project's code. Some pieces were implemented from ideas seen in other tools, such as Claude Code, OpenClaude and Cloudroom, which are compared [above](#how-forge-compares).
+
+This repository's early git history contains commits from [Free Claude Code](https://github.com/Alishahryar1/free-claude-code) by Ali Khokhar (MIT), which is why his name appears in the log. None of that code is in the current files.
