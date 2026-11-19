@@ -92,7 +92,7 @@ That's a lot of safety machinery for a coding agent. It's intentional.
 
 **What I'd do to make it better:**
 
-The biggest remaining gap is that the shell check reads command text — it is not a sandbox. A command you approve can do anything your user account can. The right fix is to run each session in an isolated container, the way tools like [Cloudroom](https://github.com/davidondrej/cloudroom) do: the model works inside a VM, sees a copy of your project, and changes only come back to your machine after you review a diff. That's the v2 target.
+The biggest remaining gap is that the shell check reads command text — it is not a sandbox. A command you approve can do anything your user account can. The v2 target is to run each session in an isolated container or VM, keep Forge's check on every action, and bring changes back to your files only after you review a diff. [Cloudroom](https://github.com/davidondrej/cloudroom) shows the isolation half: it runs coding agents in a sandbox per thread, but with no approval prompts, and changes come back through a Git branch. Forge would add the per-action checks and the diff review on top.
 
 Beyond that: tighter tool-calling support for more local models.
 
