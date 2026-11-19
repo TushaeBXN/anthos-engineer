@@ -4,6 +4,8 @@
 
 **A software engineering agent for your terminal. It reads, edits and runs your code one step at a time, checks every step against a policy you own, and works with any model — open, closed, local, or hosted.**
 
+[![npm](https://img.shields.io/npm/v/forge-anthos-intelligence?style=for-the-badge&logo=npm&color=cb3837)](https://www.npmjs.com/package/forge-anthos-intelligence)
+[![Release](https://img.shields.io/github/v/release/TushaeBXN/anthos-engineer?style=for-the-badge&logo=github)](https://github.com/TushaeBXN/anthos-engineer/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178c6.svg?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Node.js 22+](https://img.shields.io/badge/Node.js-22+-339933.svg?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
@@ -308,6 +310,7 @@ Forge is one loop:
 - Every tool input checked against the tool's schema (required fields, types, allowed values) before the policy check
 - 13 providers: Anthropic, OpenAI, Gemini, xAI, Mistral, DeepSeek, OpenRouter, Groq, Together, Fireworks, Cerebras, Ollama, LM Studio — plus any OpenAI-compatible server
 - Works with local models for free, no API key needed
+- Installs from npm: `npm install -g forge-anthos-intelligence`
 
 **Current limitations:**
 - Local models are capable but less reliable — they may try several wrong commands before getting it right
@@ -808,6 +811,53 @@ npm test               # 198 tests
 | `verify` | 5 | Stages, skip conditions |
 
 Tests never read your `~/.forgerc`, so they give the same result on any machine.
+
+---
+
+## Releases
+
+The current version is **0.1.0**. Each release is on the [releases page](https://github.com/TushaeBXN/anthos-engineer/releases), with notes on what changed and the VS Code extension attached, and on [npm](https://www.npmjs.com/package/forge-anthos-intelligence).
+
+To update to the newest release:
+
+```bash
+npm install -g forge-anthos-intelligence@latest
+```
+
+Forge stays at 0.x while some integrations (Xcode, VS Code, providers other than Ollama) haven't been run for real. See [What has been tested](#what-has-been-tested-and-how).
+
+### Publishing a new version
+
+For maintainers. Publishing to npm needs two-factor authentication on the npm account.
+
+1. **Start from an up-to-date folder.** npm publishes whatever is in the folder you run it from, so an old checkout publishes old code:
+
+   ```bash
+   git pull && npm install
+   ```
+
+2. **Set the new version** and push it:
+
+   ```bash
+   npm version 0.2.0 --no-git-tag-version
+   git commit -am "Set version to 0.2.0" && git push
+   ```
+
+3. **Publish to npm.** This builds and runs every test first, then opens your browser to confirm with 2FA:
+
+   ```bash
+   npm publish
+   ```
+
+4. **Create the GitHub release** with notes on what changed. If the VS Code extension changed, build it with `cd vscode-extension && npx @vscode/vsce package` and attach the `.vsix`:
+
+   ```bash
+   gh release create v0.2.0 --title "Forge v0.2.0" --notes-file notes.md
+   ```
+
+5. **Check it:** `npm view forge-anthos-intelligence version` should show the new version within a few minutes.
+
+npm never lets a version number be used twice, even after it's been removed. 1.0.0 was published by mistake and removed, so the 1.0 release will need another number, such as 1.0.1.
 
 ---
 
