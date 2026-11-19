@@ -293,7 +293,7 @@ Forge is one loop:
 - Engram integration — long-term memory across sessions; auto-recall before every turn (optional, local)
 - Web search and fetch — `web_search` (DuckDuckGo, no API key) and `web_fetch` (pages as readable markdown); network access goes through the policy like everything else
 - Repo map — a ranked outline of the project in the model's instructions, so it knows where things live before reading anything
-- Project index — `forge init` records which functions call which, across files, so `find_dependents` can show what a change could break
+- Project index — `forge init` records which functions and methods call which, across files, so `find_dependents` can show what a change could break
 - VS Code extension — Forge in the terminal panel, plus "Ask About Selection" from the editor
 - Sub-agents — the `task` tool hands a job to a child agent with its own context; same policy, shared budget
 - gRPC server — `forge serve` lets editors, web UIs and scripts drive Forge, with approvals sent to the client
@@ -349,7 +349,7 @@ A dash means I haven't confirmed it either way. Claude Code and OpenClaude are f
 | Agent loop, policy, audit, undo | Yes | Yes, on `forge-deepseek` |
 | Web search and fetch | Yes, including a local server for redirects | Yes — live search, live fetch, and a deny rule blocking a host |
 | Repo map | Yes | Yes — answered a code question from the map alone |
-| Project index | Yes — plain, renamed and namespace imports, arrow functions, methods | Yes — indexed Forge itself: 73 cross-file call links, none pointing at nothing |
+| Project index | Yes — imports of every kind, methods, constructors, interfaces, name clashes | Yes — indexed Forge itself: 30 methods, 236 call links, none pointing at nothing |
 | Sub-agents | Yes, including two in parallel | Yes — `explore` found the right file and line |
 | gRPC server | Yes, over a real connection | Yes — `forge serve` + the example client |
 | 13 providers | Key handling and addresses | Each hosted address answered; **no real conversation yet** (needs each provider's key) |
@@ -559,11 +559,11 @@ most serious first. Do not edit anything.
 
 ## Project index
 
-`forge init` builds an index of your TypeScript code: every file, every top-level function, which files import which, and which functions call which, including calls into other files. `forge query` and the model's `find_dependents` tool read it to answer "what could break if I change this?"
+`forge init` builds an index of your TypeScript code: every file, every top-level function, every class method (named `Class.method`), which files import which, and which functions and methods call which, including calls into other files. `forge query` and the model's `find_dependents` tool read it to answer "what could break if I change this?"
 
 ```
 $ forge init
-  Indexed 61 files: 275 functions and modules, 671 links.
+  Indexed 61 files: 306 functions and modules, 745 links.
 
 $ forge query parseAgentFile
   18 things depend on parseAgentFile:
@@ -575,17 +575,19 @@ $ forge query parseAgentFile
     ...
 ```
 
-The list is everything that depends on it directly or indirectly: `loadAgentTypes` calls `parseAgentFile`, `createAgent` calls `loadAgentTypes`, and so on out to the places that start Forge. A name that matches several things gets a list to choose from.
+The list is everything that depends on it directly or indirectly: `loadAgentTypes` calls `parseAgentFile`, `createAgent` calls `loadAgentTypes`, and so on out to the places that start Forge. A name that matches several things gets a list to choose from. Methods can be asked for by their short name: `forge query isTripped` finds `Telemetry.isTripped`.
 
 How calls are linked:
 
-- A call to a function imported from another file is linked to where that function is defined, including renamed imports (`import { a as b }`) and namespace imports (`mod.a()`).
+- Every call is resolved by the TypeScript type checker, so it links to what actually runs: a function imported from another file (including renamed imports `import { a as b }` and namespace imports `mod.a()`), a method called on an object (`store.save()`, `this.flush()`, `Store.create()`), or a constructor (`new Store()`).
+- A call is never linked by name alone when the type checker knows better: `xs.join(",")` on an array is not linked to some unrelated function of yours called `join`.
 - Only calls into your own code are linked. Calls into libraries (`path.join`, `String`, a package's functions) are left out, since they aren't part of what you're changing.
 
 **Limits:**
 
 - **TypeScript only.** The [repo map](#repo-map) covers other languages, but only as an outline.
-- **Top-level functions only.** A function defined with `function` or `const x = () => …` at the top of a file is indexed; class methods are not, so a call like `store.save()` isn't linked.
+- **What's indexed:** top-level functions (`function f` or `const f = () => …`) and the methods, constructors and arrow-function properties of top-level classes. Functions nested inside other functions, getters and setters are not.
+- **Calls through an interface aren't linked.** If a function takes a `Saver` interface and calls `s.save()`, the index can't know which class will run, so it records nothing rather than guess.
 - **Run `forge init` (or `/init` inside a conversation) again after big changes.** The index reflects the code as it was at the last index; Forge's own edits don't update it.
 
 **The index vs the repo map:** the repo map is built automatically for every language and gives the model a quick outline at the start. The index needs `forge init`, covers TypeScript, and answers a precise question: what depends on this function?
@@ -709,7 +711,7 @@ diff/semantic.ts         # semantic diff grouping
 ## Tests
 
 ```bash
-npm test               # 172 tests
+npm test               # 175 tests
 ```
 
 `npm audit` reports no known vulnerabilities in Forge's dependencies (as of 2026-11-18). This matters more than usual for an agent: the `glob` tool passes model-written patterns to `glob` and `minimatch`, so a denial-of-service bug in either could let text the model has read hang Forge.
@@ -725,7 +727,7 @@ npm test               # 172 tests
 | `repomap` | 6 | Definitions per language, ranking, budget |
 | `grpc` | 5 | A full turn over a real connection, approvals, token check |
 | `mcp` | 8 | A real MCP server: calls, errors, policy, project trust, a server that fails to start |
-| `extractor` | 1 | The project indexer: imports, calls across files (including renamed and namespace imports), never library files |
+| `extractor` | 4 | The project indexer: functions and methods, calls across files, constructors, interfaces, never library files |
 | `vscode` | 8 | Message formatting, every command, unsaved files |
 | `usage` | 14 | Model lookup, provider keys, status line, cost, budget |
 | `git-executor` | 19 | Branch names, protected branches, verification gate |

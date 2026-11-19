@@ -49,7 +49,7 @@ async function run(): Promise<void> {
     nodes: nodes.length,
     edges: graph.getEdges().length,
     modules: nodes.filter((n) => n.kind === "module").length,
-    functions: nodes.filter((n) => n.kind === "function").length,
+    functions: nodes.filter((n) => n.kind === "function" || n.kind === "method").length,
   });
 
   // ── 2. Run the agent loop, reporting each step to the page ────────────────

@@ -1,4 +1,4 @@
-import { Node, Project, SyntaxKind } from "ts-morph";
+import { Node, Project, SyntaxKind, type SourceFile, type Symbol as TsSymbol } from "ts-morph";
 import path from "node:path";
 import type { SystemNode, SystemEdge } from "../schema.js";
 import type { Extractor, ExtractionResult } from "../extractor.js";
@@ -7,8 +7,8 @@ function moduleId(filePath: string): string {
   return `module:${filePath}`;
 }
 
-function functionId(filePath: string, name: string): string {
-  return `function:${filePath}:${name}`;
+function nodeId(kind: "function" | "method", filePath: string, name: string): string {
+  return `${kind}:${filePath}:${name}`;
 }
 
 function depId(specifier: string): string {
@@ -19,12 +19,30 @@ function edgeId(fromId: string, kind: string, toId: string): string {
   return `${fromId}->${kind}->${toId}`;
 }
 
-/** The name of a declaration the index records as a function (top level only), or null. */
-function indexedFunctionName(decl: Node): string | null {
-  if (Node.isFunctionDeclaration(decl) && Node.isSourceFile(decl.getParent())) return decl.getName() ?? null;
-  if (Node.isVariableDeclaration(decl) && Node.isSourceFile(decl.getVariableStatement()?.getParent())) {
-    const init = decl.getInitializer();
-    if (init?.isKind(SyntaxKind.ArrowFunction) || init?.isKind(SyntaxKind.FunctionExpression)) return decl.getName();
+function isFunction(init: Node | undefined): boolean {
+  return Boolean(init && (init.isKind(SyntaxKind.ArrowFunction) || init.isKind(SyntaxKind.FunctionExpression)));
+}
+
+/**
+ * What the index calls a declaration, if it records one: top-level functions, and the methods,
+ * function-valued properties and constructors of top-level named classes. Interface members,
+ * nested functions and library code are not indexed.
+ */
+function indexedName(decl: Node): { kind: "function" | "method"; name: string } | null {
+  if (Node.isFunctionDeclaration(decl) && Node.isSourceFile(decl.getParent())) {
+    const name = decl.getName();
+    return name ? { kind: "function", name } : null;
+  }
+  if (Node.isVariableDeclaration(decl) && Node.isSourceFile(decl.getVariableStatement()?.getParent()) && isFunction(decl.getInitializer())) {
+    return { kind: "function", name: decl.getName() };
+  }
+  const cls = decl.getParent();
+  const owner = Node.isClassDeclaration(cls) && Node.isSourceFile(cls.getParent()) ? cls.getName() : undefined;
+  if (owner && Node.isMethodDeclaration(decl)) return { kind: "method", name: `${owner}.${decl.getName()}` };
+  if (owner && Node.isPropertyDeclaration(decl) && isFunction(decl.getInitializer())) return { kind: "method", name: `${owner}.${decl.getName()}` };
+  // `new Store()` resolves to the class: link to its constructor, if it declares one.
+  if (Node.isClassDeclaration(decl) && Node.isSourceFile(decl.getParent()) && decl.getName() && decl.getConstructors().length > 0) {
+    return { kind: "method", name: `${decl.getName()}.constructor` };
   }
   return null;
 }
@@ -107,134 +125,80 @@ export class TypeScriptExtractor implements Extractor {
       }
     }
 
-    // ── Function declarations ──
-    const fnNodes: SystemNode[] = [];
+    // ── Functions and class methods: the things calls are linked between ──
+    const callers: { node: SystemNode; body: Node }[] = [];
+    const add = (kind: "function" | "method", name: string, decl: Node) => {
+      const id = nodeId(kind, filePath, name);
+      if (nodes.some((n) => n.id === id)) return;
+      const node: SystemNode = { id, kind, name, filePath, startLine: decl.getStartLineNumber(), endLine: decl.getEndLineNumber() };
+      nodes.push(node);
+      callers.push({ node, body: decl });
+      // The module contains it.
+      edges.push({ id: edgeId(modId, "imports", id), kind: "imports", fromId: modId, toId: id, confidence: 1.0, metadata: { relationship: "contains" } });
+    };
 
     for (const fn of sf.getFunctions()) {
       const name = fn.getName();
-      if (!name) continue;
-      const fid = functionId(filePath, name);
-      const node: SystemNode = {
-        id: fid,
-        kind: "function",
-        name,
-        filePath,
-        startLine: fn.getStartLineNumber(),
-        endLine: fn.getEndLineNumber(),
-      };
-      nodes.push(node);
-      fnNodes.push(node);
-
-      // function is contained in module
-      edges.push({
-        id: edgeId(modId, "imports", fid),
-        kind: "imports",
-        fromId: modId,
-        toId: fid,
-        confidence: 1.0,
-        metadata: { relationship: "contains" },
-      });
+      if (name) add("function", name, fn);
+    }
+    for (const v of sf.getVariableDeclarations()) {
+      if (isFunction(v.getInitializer())) add("function", v.getName(), v);
+    }
+    for (const cls of sf.getClasses()) {
+      const className = cls.getName();
+      if (!className) continue;
+      for (const ctor of cls.getConstructors()) add("method", `${className}.constructor`, ctor);
+      for (const m of cls.getMethods()) add("method", `${className}.${m.getName()}`, m);
+      for (const prop of cls.getProperties()) {
+        if (isFunction(prop.getInitializer())) add("method", `${className}.${prop.getName()}`, prop);
+      }
     }
 
-    // Arrow functions / function expressions assigned to top-level variables
-    for (const varDecl of sf.getVariableDeclarations()) {
-      const init = varDecl.getInitializer();
-      if (
-        !init ||
-        (!init.isKind(SyntaxKind.ArrowFunction) &&
-          !init.isKind(SyntaxKind.FunctionExpression))
-      )
-        continue;
-      const name = varDecl.getName();
-      const fid = functionId(filePath, name);
-      const node: SystemNode = {
-        id: fid,
-        kind: "function",
-        name,
-        filePath,
-        startLine: varDecl.getStartLineNumber(),
-        endLine: varDecl.getEndLineNumber(),
-      };
-      nodes.push(node);
-      fnNodes.push(node);
-      edges.push({
-        id: edgeId(modId, "imports", fid),
-        kind: "imports",
-        fromId: modId,
-        toId: fid,
-        confidence: 1.0,
-        metadata: { relationship: "contains" },
-      });
-    }
-
-    // ── Call edges: within this file, and to functions in other project files ──
-    for (const fnNode of fnNodes) {
-      const decl =
-        sf.getFunction(fnNode.name) ??
-        sf.getVariableDeclaration(fnNode.name);
-      if (!decl) continue;
-
-      const callExprs = decl.getDescendantsOfKind(SyntaxKind.CallExpression);
-      for (const call of callExprs) {
-        const expr = call.getExpression();
-        const calleeName = expr.isKind(SyntaxKind.Identifier)
-          ? expr.getText()
-          : expr.isKind(SyntaxKind.PropertyAccessExpression)
-            ? expr.getName()
-            : null;
-
-        if (!calleeName) continue;
-
-        // Try to find callee in the same file
-        const localTarget = fnNodes.find((n) => n.name === calleeName);
-        if (localTarget) {
-          const eid = edgeId(fnNode.id, "calls", localTarget.id);
-          if (!edges.find((e) => e.id === eid)) {
-            edges.push({
-              id: eid,
-              kind: "calls",
-              fromId: fnNode.id,
-              toId: localTarget.id,
-              confidence: 1.0,
-            });
+    // ── Calls: resolved through the type checker, in this file or in other project files ──
+    for (const { node, body } of callers) {
+      const calls = [...body.getDescendantsOfKind(SyntaxKind.CallExpression), ...body.getDescendantsOfKind(SyntaxKind.NewExpression)];
+      for (const call of calls) {
+        for (const targetId of this.callTargets(call.getExpression(), sf, filePath, nodes)) {
+          const eid = edgeId(node.id, "calls", targetId);
+          if (!edges.some((e) => e.id === eid)) {
+            edges.push({ id: eid, kind: "calls", fromId: node.id, toId: targetId, confidence: 0.9 });
           }
-          continue;
-        }
-
-        // Resolve through the type checker, following imports to where the function is defined.
-        try {
-          let sym = expr.getSymbol();
-          if (sym?.isAlias()) sym = sym.getAliasedSymbol() ?? sym;
-          const decls = sym?.getDeclarations() ?? [];
-          for (const d of decls) {
-            const sf2 = d.getSourceFile();
-            if (sf2.getFilePath() === absPath) continue;
-            // Only calls into the project's own code. Newer TypeScript also resolves calls
-            // like path.join into library type files, which are not part of the project.
-            if (sf2.isDeclarationFile() || sf2.isInNodeModules()) continue;
-            const targetPath = path.relative(process.cwd(), sf2.getFilePath());
-            if (targetPath.startsWith("..") || path.isAbsolute(targetPath)) continue;
-            // Link only to functions the index has; use the defined name, so `import { a as b }` links to a.
-            const definedName = indexedFunctionName(d);
-            if (!definedName) continue;
-            const targetId = functionId(targetPath, definedName);
-            const eid = edgeId(fnNode.id, "calls", targetId);
-            if (!edges.find((e) => e.id === eid)) {
-              edges.push({
-                id: eid,
-                kind: "calls",
-                fromId: fnNode.id,
-                toId: targetId,
-                confidence: 0.9,
-              });
-            }
-          }
-        } catch {
-          // unresolvable — skip
         }
       }
     }
 
     return { nodes, edges };
+  }
+
+  /** The indexed functions or methods a call (or `new`) can reach, as node ids. */
+  private callTargets(expr: Node, sf: SourceFile, filePath: string, nodes: SystemNode[]): string[] {
+    let sym: TsSymbol | undefined;
+    try {
+      sym = expr.getSymbol();
+      if (sym?.isAlias()) sym = sym.getAliasedSymbol() ?? sym;
+    } catch {
+      sym = undefined;
+    }
+
+    // Unresolvable plain call such as `helper()`: fall back to a function of that name in this file.
+    // Never for `x.name()`, where a same-named local function is almost always unrelated.
+    if (!sym) {
+      if (!expr.isKind(SyntaxKind.Identifier)) return [];
+      const local = nodes.find((n) => n.kind === "function" && n.name === expr.getText());
+      return local ? [local.id] : [];
+    }
+
+    const targets: string[] = [];
+    for (const decl of sym.getDeclarations()) {
+      const target = indexedName(decl);
+      if (!target) continue;
+      const declFile = decl.getSourceFile();
+      // Only calls into the project's own code, not libraries or type definitions.
+      if (declFile.isDeclarationFile() || declFile.isInNodeModules()) continue;
+      const targetPath = declFile === sf ? filePath : path.relative(process.cwd(), declFile.getFilePath());
+      if (targetPath.startsWith("..") || path.isAbsolute(targetPath)) continue;
+      targets.push(nodeId(target.kind, targetPath, target.name));
+    }
+    return targets;
   }
 }

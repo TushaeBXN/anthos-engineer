@@ -1,4 +1,4 @@
-export type NodeKind = "function" | "module" | "dependency";
+export type NodeKind = "function" | "method" | "module" | "dependency";
 export type EdgeKind = "calls" | "imports";
 
 export interface SystemNode {

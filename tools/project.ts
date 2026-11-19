@@ -11,7 +11,7 @@ export const findDependents: Tool = {
   inputSchema: {
     type: "object",
     properties: {
-      name: { type: "string", description: "A function name, or part of a file path" },
+      name: { type: "string", description: "A function name, a method (save or Store.save), or part of a file path" },
     },
     required: ["name"],
   },
@@ -28,7 +28,10 @@ export const findDependents: Tool = {
     }
 
     const name = String(input.name);
-    const matches = graph.getNodes().filter((n) => n.id === name || n.name === name || n.filePath.includes(name));
+    // A method is named Class.method; "method" alone finds it too.
+    const matches = graph
+      .getNodes()
+      .filter((n) => n.id === name || n.name === name || n.name.endsWith(`.${name}`) || n.filePath.includes(name));
     if (matches.length === 0) return { output: `Nothing in the index matches "${name}".` };
     if (matches.length > 1 && !matches.some((n) => n.id === name)) {
       const list = matches.slice(0, 30).map((n) => `  ${n.kind} ${n.name} (${n.filePath})`).join("\n");
