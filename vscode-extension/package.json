@@ -18,7 +18,8 @@
   ],
   "files": [
     "extension.js",
-    "messages.js"
+    "messages.js",
+    "LICENSE"
   ],
   "main": "./extension.js",
   "activationEvents": [

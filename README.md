@@ -427,7 +427,7 @@ On Windows and Linux, `Cmd+Alt+F` is `Ctrl+Alt+F`. Forge reads files from disk, 
 ```bash
 npm run build && npm link          # puts the forge command on your PATH
 cd vscode-extension
-npx @vscode/vsce package --skip-license
+npx @vscode/vsce package
 code --install-extension forge-vscode-0.1.0.vsix
 ```
 
