@@ -49,6 +49,7 @@ Requires Node.js 22+. Choose a model once with `npx tsx cli/index.ts config set 
 | `agent/compaction.ts` | When and how to summarize the conversation to free context |
 | `agent/subagents.ts` | The `task` tool, agent types, `.forge/agents/` loader |
 | `agent/mcp.ts` | MCP servers: config, project trust, connect, wrap tools |
+| `agent/version.ts` | Forge's version, read from package.json (the only place it's set) |
 | `agent/sandbox.ts` | Runs commands in the OS sandbox: macOS Seatbelt, Linux bubblewrap; sets aside protected paths a command created |
 | `agent/doctor.ts` | `forge doctor`: setup checks, each with a fix; writes nothing, never prints a key |
 | `agent/providers/anthropic.ts` | Anthropic SDK |

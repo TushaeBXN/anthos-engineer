@@ -156,6 +156,7 @@ forge config set provider ollama          # save your provider
 forge config set model <model-name>       # save your model
 forge config get                          # show ~/.forgerc
 forge providers                           # every provider, and whether its key is set
+forge --version                           # the installed version
 ```
 
 Settings are saved to `~/.forgerc` and survive terminal restarts — no need to `export` env vars every time.
@@ -939,6 +940,7 @@ agent/
 ├── compaction.ts        # when and how to summarize the conversation
 ├── subagents.ts         # the task tool, agent types, .forge/agents loader
 ├── mcp.ts               # MCP servers: config, trust, connect, tools
+├── version.ts           # Forge's version, read from package.json
 ├── doctor.ts            # forge doctor: setup checks and how to fix each
 ├── sandbox.ts           # runs commands in the OS sandbox (macOS Seatbelt, Linux bubblewrap)
 └── providers/
@@ -972,7 +974,7 @@ model/                   # the project index behind forge init and find_dependen
 verify/chain.ts          # type check → tests → lint
 executor/git.ts          # guarded git helpers
 diff/semantic.ts         # semantic diff grouping
-tests/                   # 310 tests; fixtures/ holds small MCP servers used by them
+tests/                   # 313 tests; fixtures/ holds small MCP servers used by them
 ```
 
 ---
@@ -980,7 +982,7 @@ tests/                   # 310 tests; fixtures/ holds small MCP servers used by 
 ## Tests
 
 ```bash
-npm test               # 310 tests
+npm test               # 313 tests
 ```
 
 CI runs them on Linux (Ubuntu) on every push to `main`, with bubblewrap installed, so the Linux sandbox tests run for real there; on a Mac, the macOS ones run instead.
@@ -1034,7 +1036,9 @@ npm install -g forge-anthos-intelligence@latest
 | [0.2.0](https://github.com/TushaeBXN/anthos-engineer/releases/tag/v0.2.0) | 2026-11-20 | [`forge doctor`](#checking-your-setup): checks the setup and says how to fix each problem |
 | [0.1.0](https://github.com/TushaeBXN/anthos-engineer/releases/tag/v0.1.0) | 2026-11-19 | First release: the agent loop and policy, 13 providers, MCP, sub-agents, streaming, compaction, repo map, project index, gRPC, VS Code |
 
-**Not yet released** (on `main`, in the next version): when the sandbox blocks a protected file inside the project, such as `git init` or a write to `forge.policy.yaml`, the hint to the model names the protected files instead of saying commands can write only in the project.
+**Not yet released** (on `main`, in the next version):
+- When the sandbox blocks a protected file inside the project, such as `git init` or a write to `forge.policy.yaml`, the hint to the model names the protected files instead of saying commands can write only in the project.
+- `forge --version` (or `-v`) prints the version. Before, Forge took it as a request and sent it to the model. Any other unknown option, such as a misspelled flag, is now an error instead of a request.
 
 The v0.4.0 tag points at `099be44`, one commit before a fix to a test file; the published code is the same.
 

@@ -27,6 +27,7 @@ import { StdioClientTransport, getDefaultEnvironment } from "@modelcontextprotoc
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { CallToolResultSchema } from "@modelcontextprotocol/sdk/types.js";
 import type { Tool } from "./types.js";
+import { VERSION } from "./version.js";
 
 export interface McpServerConfig {
   command?: string;
@@ -93,7 +94,7 @@ export async function connectMcp(cwd: string, options: McpOptions = {}): Promise
   const tools: Tool[] = [];
   const results = await Promise.all(
     toStart.map(async ({ name, config, source }) => {
-      const client = new Client({ name: "forge", version: "0.4.2" });
+      const client = new Client({ name: "forge", version: VERSION });
       try {
         await withTimeout(connect(client, name, config, cwd), CONNECT_TIMEOUT_MS, `${name} did not start within ${CONNECT_TIMEOUT_MS / 1000}s`);
         clients.push(client);

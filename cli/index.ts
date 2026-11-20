@@ -8,6 +8,7 @@
  *   forge policy          Ready-made policies for forge.policy.yaml
  *   forge init            Index the project, for find_dependents
  *   forge query <name>    Show what depends on a function or module
+ *   forge --version       Show the version
  */
 import { glob } from "glob";
 import { runTurn } from "../agent/loop.js";
@@ -16,6 +17,7 @@ import { PROVIDERS, RC_PATH, detectContextWindow, resolveModel, writeRc } from "
 import type { McpConnection } from "../agent/mcp.js";
 import { confirm, printHeader, printStatus, prompt, statusLine, terminal } from "../agent/ui.js";
 import { runCommand, type CommandContext } from "./commands.js";
+import { VERSION } from "../agent/version.js";
 
 const HELP = `
   forge                          Start a conversation
@@ -29,6 +31,7 @@ const HELP = `
   forge query <name>             Show what depends on a function or module
   forge config set <key> <val>   Save a setting to ~/.forgerc
   forge config get               Show the current ~/.forgerc
+  forge --version                Show the version
 
   Keys: provider  model  baseUrl  budget  context  priceInput  priceOutput  repoMap  compactAt
         sandbox (auto|on|off)  sandboxNetwork (on|off)
@@ -217,6 +220,9 @@ async function main(): Promise<void> {
 
   if (command === undefined) return chat();
   if (command === "help" || command === "--help" || command === "-h") return console.log(HELP);
+  if (command === "version" || command === "--version" || command === "-v") return console.log(VERSION);
+  // An unknown option is a typo, not a request: don't send it to the model.
+  if (command.startsWith("-")) throw new Error(`Unknown option: ${command}. Run "forge help" for the list.`);
   if (command === "init") return init();
   if (command === "providers") return providers();
   if (command === "doctor") return doctor(rest);
