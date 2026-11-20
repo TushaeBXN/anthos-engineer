@@ -1016,7 +1016,7 @@ Tests never read your `~/.forgerc`, so they give the same result on any machine.
 
 ## Releases
 
-The current version is **0.4.1**. Each release is on the [releases page](https://github.com/TushaeBXN/anthos-engineer/releases), with notes on what changed and the VS Code extension attached, and on [npm](https://www.npmjs.com/package/forge-anthos-intelligence).
+The current version is **0.4.2**. Each release is on the [releases page](https://github.com/TushaeBXN/anthos-engineer/releases), with notes on what changed and the VS Code extension attached, and on [npm](https://www.npmjs.com/package/forge-anthos-intelligence).
 
 To update to the newest release:
 
@@ -1026,6 +1026,7 @@ npm install -g forge-anthos-intelligence@latest
 
 | Version | Date | What's new |
 |---|---|---|
+| [0.4.2](https://github.com/TushaeBXN/anthos-engineer/releases/tag/v0.4.2) | 2026-11-20 | Sandbox fixes: commands can no longer swap `.git` for another, or create a policy file or repo where there was none |
 | [0.4.1](https://github.com/TushaeBXN/anthos-engineer/releases/tag/v0.4.1) | 2026-11-20 | The Linux sandbox, tested for real on Ubuntu; Forge checks that bubblewrap can start before using it |
 | [0.4.0](https://github.com/TushaeBXN/anthos-engineer/releases/tag/v0.4.0) | 2026-11-20 | [Sandbox](#sandbox): commands run in macOS Seatbelt or Linux bubblewrap and can write only inside the project |
 | [0.3.0](https://github.com/TushaeBXN/anthos-engineer/releases/tag/v0.3.0) | 2026-11-20 | [Ready-made policies](#ready-made-policies) (`forge policy use`); `verify` now goes through the policy; fixes for chained commands, the circuit breaker and empty replies |
@@ -1033,6 +1034,8 @@ npm install -g forge-anthos-intelligence@latest
 | [0.1.0](https://github.com/TushaeBXN/anthos-engineer/releases/tag/v0.1.0) | 2026-11-19 | First release: the agent loop and policy, 13 providers, MCP, sub-agents, streaming, compaction, repo map, project index, gRPC, VS Code |
 
 The v0.4.0 tag points at `099be44`, one commit before a fix to a test file; the published code is the same.
+
+**Updating from 0.4.1:** `git init` inside Forge is now blocked on Linux too (it already failed on macOS): the new repo is renamed to `.git.blocked-by-forge`. Run `git init` yourself. Anything else a command creates among Forge's and git's protected files is set aside the same way, and the model is told.
 
 **Updating from 0.4.0** (Linux only; nothing changes on macOS): where bubblewrap is installed but can't start a sandbox, as in some containers, 0.4.0 tried to use it anyway and every command failed. 0.4.1 runs commands without it there (with `sandbox on`, it runs none), and `forge doctor` says why.
 
