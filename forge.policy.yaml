@@ -1,64 +1,73 @@
+# Forge policy: workspace-write
+# Made by `forge policy use workspace-write`, plus verify's commands for this repo. Edit it freely; rules are tried in order and the first match decides.
+# Forge reads and edits files in this project. It asks before shell commands, commits, pushes, web access, MCP tools and files outside the project.
+# Rule reference: https://github.com/TushaeBXN/anthos-engineer#permissions
 version: 1
 default: deny
 
 rules:
-  # Hard deny: SSH directory is never writable by any agent
-  - id: deny-ssh-writes
+  # Never read or write credentials: reading them would send them to the model.
+  - id: deny-ssh
     resource: filesystem
-    operation: write
+    operation: "*"
     target: "~/.ssh/**"
     effect: deny
 
-  # Hard deny: credentials and secrets
-  - id: deny-secrets-writes
+  - id: deny-aws
     resource: filesystem
-    operation: write
+    operation: "*"
     target: "~/.aws/**"
     effect: deny
 
-  # Allow: agents may read any file
-  - id: allow-all-reads
+  - id: deny-gnupg
+    resource: filesystem
+    operation: "*"
+    target: "~/.gnupg/**"
+    effect: deny
+
+  # .env files usually hold keys: ask before reading one.
+  - id: ask-env-files
+    resource: filesystem
+    operation: read
+    target: "**/.env"
+    effect: allow
+    requires_approval: true
+
+  - id: ask-env-variants
+    resource: filesystem
+    operation: read
+    target: "**/.env.*"
+    effect: allow
+    requires_approval: true
+
+  # Files outside this project: ask, for reading and writing.
+  - id: ask-outside-project
+    resource: filesystem
+    operation: "*"
+    target: "/**"
+    effect: allow
+    requires_approval: true
+
+  - id: allow-project-reads
     resource: filesystem
     operation: read
     target: "**"
     effect: allow
 
-  # Allow: agents may write within src/
-  - id: allow-src-writes
+  - id: allow-project-writes
     resource: filesystem
     operation: write
-    target: "src/**"
+    target: "**"
     effect: allow
 
-  # Allow: agents may write within model/, policy/, capability/, executor/, diff/, verify/, cli/
-  - id: allow-forge-module-writes
-    resource: filesystem
-    operation: write
-    target: "{model,policy,capability,executor,diff,verify,cli}/**"
-    effect: allow
-
-  # Allow: test runner
-  - id: allow-test-runner
-    resource: shell
-    operation: npm test
-    target: "*"
-    effect: allow
-
-  # Allow: type checker
-  - id: allow-tsc
-    resource: shell
-    operation: npx tsc
-    target: "*"
-    effect: allow
-
-  # Hard deny: force-push is never allowed, regardless of branch
-  - id: deny-git-force-push
+  # Git: look and stage freely; commit and push ask (no rule); never force-push or push to main.
+  # Never rewrite shared history.
+  - id: deny-force-push
     resource: git
     operation: force-push
     target: "**"
     effect: deny
 
-  # Hard deny: never push to main or master directly
   - id: deny-push-main
     resource: git
     operation: push
@@ -71,46 +80,9 @@ rules:
     target: "master"
     effect: deny
 
-  # Requires approval: git push to a forge/* branch
-  - id: require-approval-git-push
-    resource: git
-    operation: push
-    target: "forge/**"
-    effect: allow
-    requires_approval: true
-
-  # Requires approval: commit (staging + committing implies a visible change)
-  - id: require-approval-git-commit
-    resource: git
-    operation: commit
-    target: "**"
-    effect: allow
-    requires_approval: true
-
-  # Allow: stage specific files (agent must name the paths — no git add -A)
-  - id: allow-git-add
-    resource: git
-    operation: add
-    target: "**"
-    effect: allow
-
-  # Allow: create a forge/* branch
-  - id: allow-git-branch
-    resource: git
-    operation: branch
-    target: "forge/**"
-    effect: allow
-
-  # Allow: git read operations
   - id: allow-git-status
     resource: git
     operation: status
-    target: "**"
-    effect: allow
-
-  - id: allow-git-log
-    resource: git
-    operation: log
     target: "**"
     effect: allow
 
@@ -120,8 +92,63 @@ rules:
     target: "**"
     effect: allow
 
+  - id: allow-git-log
+    resource: git
+    operation: log
+    target: "**"
+    effect: allow
+
+  - id: allow-git-show
+    resource: git
+    operation: show
+    target: "**"
+    effect: allow
+
   - id: allow-git-rev-parse
     resource: git
     operation: rev-parse
     target: "**"
     effect: allow
+
+  - id: allow-git-add
+    resource: git
+    operation: add
+    target: "**"
+    effect: allow
+
+  # This repo: verify's three commands run without asking (type check, tests, lint).
+  - id: allow-tsc
+    resource: shell
+    operation: npx tsc
+    target: "*"
+    effect: allow
+
+  - id: allow-tests
+    resource: shell
+    operation: npm test
+    target: "*"
+    effect: allow
+
+  - id: allow-eslint
+    resource: shell
+    operation: npx eslint
+    target: "*"
+    effect: allow
+
+  # Any other shell command has no rule, so it asks. To stop asking for one, allow it, e.g.:
+  #
+  #   - id: allow-tests
+  #     resource: shell
+  #     operation: npm test
+  #     target: "*"
+  #     effect: allow
+  #
+  # Forge can edit package.json, so allowing "npm test" or "npm run" lets it run any script it writes.
+
+  # Web search, web fetch and MCP tools have no rule, so Forge asks. To allow web search:
+  #
+  #   - id: allow-web-search
+  #     resource: network
+  #     operation: search
+  #     target: duckduckgo.com
+  #     effect: allow
