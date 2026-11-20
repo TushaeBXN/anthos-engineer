@@ -410,7 +410,7 @@ A dash means I haven't confirmed it either way. Claude Code and OpenClaude are f
 
 [claw-code](https://github.com/ultraworkers/claw-code) is an open-source coding agent written in Rust, modeled on Claude Code. Forge's sandbox was built from the same idea, with its own code. This comparison is from claw-code's code and commits as of 2026-11-20 (release v0.1.13, 2026-11-09); I haven't run claw-code.
 
-| | Forge 0.4.3 | claw-code v0.1.13 |
+| | Forge 0.4.4 | claw-code v0.1.13 |
 |---|---|---|
 | Permission levels | A rule for each resource, action and target (allow, ask or deny), plus three ready-made presets | Three fixed modes: read-only, workspace-write, danger-full-access |
 | Sandbox on macOS | Yes (Seatbelt), escape tests run for real | No, Linux only |
@@ -638,12 +638,12 @@ On Windows and Linux, `Cmd+Alt+F` is `Ctrl+Alt+F`. Forge reads files from disk, 
 2. Download the `forge-vscode-*.vsix` file from the [latest release](https://github.com/TushaeBXN/anthos-engineer/releases/latest), then install it, using the version you downloaded:
 
 ```bash
-code --install-extension forge-vscode-0.1.0.vsix
+code --install-extension forge-vscode-0.1.1.vsix
 ```
 
 To build the extension yourself instead: `cd vscode-extension && npx @vscode/vsce package`. `vsce` fails if the folder's path contains a space; copy the folder somewhere without one first.
 
-The Forge terminal runs only Forge. When Forge quits, the terminal ends with it, and the next command starts Forge again, so nothing you ask is ever typed into a plain shell. Extension 0.1.0 didn't do this; update to 0.1.1.
+The Forge terminal runs only Forge. When Forge quits, the terminal ends with it, and the next command starts Forge again, so nothing you ask is ever typed into a plain shell. Extension 0.1.0 didn't do this; update to 0.1.1 or later.
 
 If you'd rather not link the command, set **Forge: Command** in VS Code's settings to the full command, for example `npx tsx /path/to/anthos-engineer/cli/index.ts`.
 
@@ -1029,7 +1029,7 @@ Tests never read your `~/.forgerc`, so they give the same result on any machine.
 
 ## Releases
 
-The current version is **0.4.3**. Each release is on the [releases page](https://github.com/TushaeBXN/anthos-engineer/releases), with notes on what changed and the VS Code extension attached, and on [npm](https://www.npmjs.com/package/forge-anthos-intelligence).
+The current version is **0.4.4**. Each release is on the [releases page](https://github.com/TushaeBXN/anthos-engineer/releases), with notes on what changed and the VS Code extension attached, and on [npm](https://www.npmjs.com/package/forge-anthos-intelligence).
 
 To update to the newest release:
 
@@ -1039,6 +1039,7 @@ npm install -g forge-anthos-intelligence@latest
 
 | Version | Date | What's new |
 |---|---|---|
+| [0.4.4](https://github.com/TushaeBXN/anthos-engineer/releases/tag/v0.4.4) | 2026-11-20 | VS Code extension 0.1.1: questions can't reach a shell after Forge quits; models' `<think>` reasoning kept out of answers; `read` line numbers can't look like indentation |
 | [0.4.3](https://github.com/TushaeBXN/anthos-engineer/releases/tag/v0.4.3) | 2026-11-20 | `forge --version`; misspelled options are errors instead of requests; `FORGE_PROVIDER` no longer keeps another provider's saved model; tool calls run in the model's order; first real session on Claude |
 | [0.4.2](https://github.com/TushaeBXN/anthos-engineer/releases/tag/v0.4.2) | 2026-11-20 | Sandbox fixes: commands can no longer swap `.git` for another, or create a policy file or repo where there was none |
 | [0.4.1](https://github.com/TushaeBXN/anthos-engineer/releases/tag/v0.4.1) | 2026-11-20 | The Linux sandbox, tested for real on Ubuntu; Forge checks that bubblewrap can start before using it |
@@ -1052,10 +1053,10 @@ npm install -g forge-anthos-intelligence@latest
 - `FORGE_PROVIDER=anthropic forge` with Ollama saved in `~/.forgerc` now uses Claude's default model. Before, it asked Anthropic for your Ollama model and failed with "not found". Set `FORGE_MODEL` to choose another.
 - When the model asks for an edit and a command in one reply, the command now runs after the edit. Before, commands ran first, so tests could run against the old file.
 
-**Not yet released** (on `main`, in the next version):
-- VS Code extension 0.1.1. In 0.1.0, once Forge quit inside its terminal, the next question was typed into the shell left behind and ran as a command, outside Forge's policy and sandbox. Now the terminal runs only Forge and ends when it does. Until the next release, build it yourself (see [VS Code](#vs-code)) or, after Forge quits, close its terminal before asking again.
-- A model's thinking no longer shows up in its answer. Some local models (DeepSeek, Qwen3 and others through Ollama) put their reasoning in the reply, ending with `</think>`; Forge showed it, with the tag, as part of the answer. Now it's hidden and kept out of the conversation. Replies still stream; for a model known to think, Forge waits for `</think>` unless the server sends the reasoning separately, as Ollama usually does.
-- `read` shows lines as `3→  text` instead of `3    text`, so the line number can't be mistaken for indentation. A local model read `3    for` as four spaces of indent and its edits failed. When an edit's text isn't found, Forge now shows the nearest line exactly, or says the line numbers were copied in.
+**Updating from 0.4.3:**
+- **Update the VS Code extension to 0.1.1** (attached to the release). In 0.1.0, once Forge quit inside its terminal, the next question was typed into the shell left behind and ran as a command, outside Forge's policy and sandbox. Now the terminal runs only Forge and ends when it does.
+- A local model's thinking (text ending with `</think>`) no longer shows up in its answer, and isn't kept in the conversation.
+- `read` shows lines as `3→  text`. If you have scripts or prompts that parse its output, the separator after the number is now `→` instead of two spaces.
 
 The v0.4.0 tag points at `099be44`, one commit before a fix to a test file; the published code is the same.
 
@@ -1072,7 +1073,7 @@ The v0.4.0 tag points at `099be44`, one commit before a fix to a test file; the 
 - `verify` is now checked as the commands it runs (`npx tsc`, `npm test`, `npx eslint`). If your policy has no rule for them, it asks before running; add shell rules for the ones you trust.
 - If your own policy uses `target: "**"` to mean the project, it also covers files outside it, such as `~/.ssh`. See [Rule order matters](#ready-made-policies).
 
-The VS Code extension is versioned on its own: 0.1.0 is attached to releases up to 0.4.3, and 0.1.1 is on `main`, to be attached from the next release. Every release has it attached, so the [latest release](https://github.com/TushaeBXN/anthos-engineer/releases/latest) always has a copy.
+The VS Code extension is versioned on its own: 0.1.0 is attached to releases up to 0.4.3, and 0.1.1 from 0.4.4. Every release has it attached, so the [latest release](https://github.com/TushaeBXN/anthos-engineer/releases/latest) always has a copy.
 
 Forge stays at 0.x while some integrations (Xcode, providers other than Ollama and Anthropic) haven't been run for real. See [What has been tested](#what-has-been-tested-and-how).
 

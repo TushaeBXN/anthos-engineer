@@ -1,6 +1,6 @@
 {
   "name": "forge-anthos-intelligence",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "description": "A coding agent for your terminal that checks every action against a policy you own, on open or closed models, local or hosted.",
   "keywords": [
     "coding-agent",
