@@ -27,6 +27,7 @@ Requires Node.js 22+. Choose a model once with `npx tsx cli/index.ts config set 
 - **Each provider reads only its own key** (`keyEnv` in `agent/models.ts`). Never fall back to another provider's key.
 - **Sub-agents are agents, not shortcuts.** They run `runTurn` with the parent's policy, approver and audit; they never get the `task` tool.
 - **A tool that runs commands reports them as `{ kind: "shell" }` access**, even when it isn't `bash` (`verify` reports the type check, tests and lint), so the policy sees what will run.
+- **Every command Forge runs goes through `sandboxed()` in `agent/sandbox.ts`** (bash, verify). Don't call `execFile` for a model-chosen command without it.
 - **Every tool input is checked against its schema (`checkInput` in `agent/loop.ts`) before the policy check.** Streamed tool inputs are not validated by the provider.
 - **When no one can answer an "ask", the answer is no**, and the audit log says so truthfully.
 - **MCP tools are `{ kind: "mcp" }` access.** A project's servers start only after the person trusts them; nothing writes to `.forge/`.
@@ -48,6 +49,7 @@ Requires Node.js 22+. Choose a model once with `npx tsx cli/index.ts config set 
 | `agent/compaction.ts` | When and how to summarize the conversation to free context |
 | `agent/subagents.ts` | The `task` tool, agent types, `.forge/agents/` loader |
 | `agent/mcp.ts` | MCP servers: config, project trust, connect, wrap tools |
+| `agent/sandbox.ts` | Runs commands in the OS sandbox: macOS Seatbelt, Linux bubblewrap |
 | `agent/doctor.ts` | `forge doctor`: setup checks, each with a fix; writes nothing, never prints a key |
 | `agent/providers/anthropic.ts` | Anthropic SDK |
 | `agent/providers/openai.ts` | Every OpenAI-compatible provider (OpenAI, Gemini, OpenRouter, Groq, Ollama, …) |

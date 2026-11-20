@@ -99,7 +99,12 @@ function realPath(absolute: string): string {
     rest.unshift(path.basename(existing));
     existing = path.dirname(existing);
   }
-  return path.join(fs.realpathSync(existing), ...rest);
+  try {
+    return path.join(fs.realpathSync(existing), ...rest);
+  } catch {
+    // Not allowed to look (a sandbox, or permissions): judge the path as written.
+    return absolute;
+  }
 }
 
 // ── Shell ─────────────────────────────────────────────────────────────────────

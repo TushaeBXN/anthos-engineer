@@ -3,13 +3,14 @@ import fs from "node:fs";
 import path from "node:path";
 import type { PolicyDecisionRecord } from "./schema.js";
 
-const AUDIT_DB = path.join(process.cwd(), ".forge", "audit.db");
+/** FORGE_AUDIT_DB overrides the location (the tests use ":memory:", so they never write a project's real log). */
+const AUDIT_DB = process.env["FORGE_AUDIT_DB"] || path.join(process.cwd(), ".forge", "audit.db");
 
 let _db: Database.Database | null = null;
 
 function db(): Database.Database {
   if (_db) return _db;
-  fs.mkdirSync(path.dirname(AUDIT_DB), { recursive: true });
+  if (AUDIT_DB !== ":memory:") fs.mkdirSync(path.dirname(AUDIT_DB), { recursive: true });
   _db = new Database(AUDIT_DB);
   _db.exec(`
     CREATE TABLE IF NOT EXISTS audit_log (

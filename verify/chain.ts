@@ -4,6 +4,7 @@
  * All stages run even if an earlier one fails, so you get the full picture.
  * This is a platform component, not an agent; it may use execFile directly.
  */
+import { sandboxed } from "../agent/sandbox.js";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createHash } from "node:crypto";
@@ -43,8 +44,11 @@ async function runStage(
   cwd: string,
 ): Promise<StageResult> {
   const start = Date.now();
+  // Each stage runs inside the sandbox, like any command Forge runs.
+  const launch = sandboxed(binary, args, cwd);
+  if ("error" in launch) return { stage, passed: false, stdout: "", stderr: launch.error, durationMs: 0, skipped: false };
   try {
-    const { stdout, stderr } = await execFileAsync(binary, args, {
+    const { stdout, stderr } = await execFileAsync(launch.file, launch.args, {
       cwd,
       timeout: 120_000,
     });

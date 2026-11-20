@@ -99,7 +99,7 @@ That's a lot of safety machinery for a coding agent. It's intentional.
 
 **What I'd do to make it better:**
 
-The biggest remaining gap is that the shell check reads command text — it is not a sandbox. A command you approve can do anything your user account can. The v2 target is to run each session in an isolated container or VM, keep Forge's check on every action, and bring changes back to your files only after you review a diff. [Cloudroom](https://github.com/davidondrej/cloudroom) shows the isolation half: it runs coding agents in a sandbox per thread, but with no approval prompts, and changes come back through a Git branch. Forge would add the per-action checks and the diff review on top.
+The shell check reads command text; it can't see what a command will actually do. The [sandbox](#sandbox) now closes the worst of that gap: commands Forge runs can only write inside the project, even ones you approve. The rest of the v2 target is to run each session in an isolated container or VM, keep Forge's check on every action, and bring changes back to your files only after you review a diff. [Cloudroom](https://github.com/davidondrej/cloudroom) shows the isolation half: it runs coding agents in a sandbox per thread, but with no approval prompts, and changes come back through a Git branch. Forge would add the per-action checks and the diff review on top.
 
 Beyond that: tighter tool-calling support for more local models.
 
@@ -194,6 +194,7 @@ $ forge doctor
 | Policy | No `forge.policy.yaml` (every action then needs your OK), a file that can't be read, or rules that can never match, such as a partial wildcard like `npm *` |
 | Project folder, Git, Project index | The folder isn't writable, isn't a git repository, or hasn't been indexed with `forge init` |
 | MCP | A server in `mcp.json` doesn't start. It starts each one to find out; `--no-mcp` skips this |
+| Sandbox | Off, or not available on this machine (a warning), or required with `sandbox on` but not available (a failure) |
 | Engram memory | Not running. It's optional, so this is only a warning |
 
 ✗ means Forge can't work until it's fixed, and the command then exits with code 1; ! is a warning. `forge doctor --json` gives the same checks as JSON, for scripts.
@@ -369,7 +370,8 @@ Forge is one loop:
 - Two `general` sub-agents running in parallel can edit the same file; use parallel tasks for separate files or read-only work
 - The 32k context wrapper (`num_ctx` Modelfile) is a manual step. Forge reads the window from Ollama once it's set, but doesn't create the Modelfile for you
 - Not yet run for real: Xcode, the VS Code extension, and a conversation on any provider other than Ollama (Anthropic included). Each is covered by tests against stand-ins; see [What has been tested](#what-has-been-tested-and-how)
-- Policy rules are the only thing protecting your filesystem — no sandbox isolation yet (planned for v2)
+- The [sandbox](#sandbox) covers commands (`bash`, `verify`), not MCP servers, and limits where a command can write, not what it writes: a command can still change files in the project that run later, such as a test script or a Makefile
+- On Linux the sandbox needs bubblewrap and hasn't been run for real yet (only on macOS); on Windows there's no sandbox
 
 ---
 
@@ -399,7 +401,7 @@ Forge started as a one-shot planner and was rebuilt to work like Claude Code: a 
 | Xcode (Apple's MCP bridge) | Yes | — | Yes, not yet tried with real Xcode |
 | Ready-made permission levels | Yes | — | Yes — read-only, workspace-write, full-access, written as a policy file you can edit |
 | Setup check (`doctor`) | Yes | — | Yes — includes the policy file and MCP servers |
-| Sandbox | Yes | — | No (v2) |
+| Sandbox | Yes | — | Yes — macOS Seatbelt, Linux bubblewrap; on by default where available |
 
 A dash means I haven't confirmed it either way. Claude Code and OpenClaude are far larger projects; Forge's focus is the part they share least: an agent you can govern and audit, running on whatever model you choose.
 
@@ -504,7 +506,7 @@ forge policy use workspace-write      # write it to this folder
 
 - **read-only** is for exploring or reviewing code you don't want touched.
 - **workspace-write** is the everyday choice: Forge edits the project freely and asks before anything that runs code, leaves the project or changes git history. To stop being asked about one command, uncomment the example in the file (`npm test`, say). Forge can edit `package.json`, so allowing `npm test` effectively lets it run any script it writes.
-- **full-access** runs everything without asking. Use it only in a container or on a machine where nothing can be lost.
+- **full-access** runs everything without asking, except commands with redirection or substitution (`>`, `$(...)`, backticks): the policy can't see what those will do, so they still ask. Use it only in a container or on a machine where nothing can be lost; the [sandbox](#sandbox) still limits where commands can write.
 
 Whatever the policy says, Forge never writes `forge.policy.yaml`, `.forge/` or `.git/`. Unattended (`forge "<request>"` or `forge serve` with no one to approve), every "ask" is a no.
 
@@ -545,6 +547,42 @@ These are tested action by action (`tests/presets.test.ts`) and were run for rea
 | `verify`, `npm test -- --watch` | allow |
 | `rm -rf dist`, `git commit` | ask |
 | `git push origin main` | deny |
+
+### Sandbox
+
+The policy decides whether a command may run; the sandbox limits what it can do once it runs. Every command Forge runs (`bash` and `verify`) runs inside the operating system's own sandbox, so even a command you approved can't touch the rest of your machine:
+
+| Inside the sandbox | |
+|---|---|
+| Write in the project and temp folders | allowed |
+| Write anywhere else (your home folder, other projects, system files) | **blocked** |
+| Change `forge.policy.yaml` or the audit log, even inside the project | **blocked** |
+| Change `.git/config` or `.git/hooks` (they'd run code later, outside the sandbox) | **blocked** |
+| Read or write `~/.ssh`, `~/.aws`, `~/.gnupg` | **blocked** |
+| Normal git: add, commit, branch | allowed |
+| Reach this machine (local model servers, test servers) | allowed |
+| Reach the internet | allowed, or blocked with `sandboxNetwork off` |
+
+| Platform | How |
+|---|---|
+| macOS | Seatbelt (`sandbox-exec`), built into macOS |
+| Linux | [bubblewrap](https://github.com/containers/bubblewrap) (`bwrap`), if installed: `apt install bubblewrap` or `dnf install bubblewrap` |
+| Windows | None yet |
+
+```bash
+forge config set sandbox auto           # the default: use it when the OS has one
+forge config set sandbox on             # require it: with no sandbox, commands don't run
+forge config set sandbox off            # turn it off
+forge config set sandboxNetwork off     # sandboxed commands can't reach the internet
+```
+
+`forge doctor` shows whether it's on. When a command fails because of it, Forge tells the model so, and the model can ask you to run that command yourself. `git push` over SSH needs your SSH key, which the sandbox hides, so push yourself or use HTTPS.
+
+**What it covers, and what it doesn't.** It covers commands Forge runs. Forge's own `read`, `write` and `edit` tools run inside Forge and are covered by the policy instead. MCP servers are started by you, from your config, and aren't sandboxed. The sandbox limits *where* a command can write, not *what*: a command can still change a file in the project that runs later, such as a test script or a Makefile, which is one more reason to review the diff.
+
+**Tested on macOS** (`tests/sandbox.test.ts`): Forge's own `bash` tool tried to write to the home folder, rewrite the policy file and the audit log, plant a git hook and change git config, read `~/.ssh`, and reach the internet with the network off. All were blocked, while writes in the project, a real git commit and a local server still worked. In a real run on `forge-deepseek` under the `full-access` policy, which allows everything, `touch ~/forge-escape-test.txt` was blocked and `touch notes.txt` in the project worked. The model then explained which was which. Forge's whole test suite also passes from inside the sandbox, the way `verify` runs it. The Linux path is built and its arguments are tested, but it hasn't been run on Linux yet.
+
+**Compared with claw-code's.** [claw-code](https://github.com/ultraworkers/claw-code) also sandboxes commands, using Linux namespaces (`unshare`). It works only on Linux, and its "workspace-only" file mode sets an environment variable rather than blocking writes. Forge's sandbox blocks writes outside the project on macOS as well as Linux, and protects the policy, the audit log and git hooks inside it.
 
 ---
 
@@ -873,6 +911,7 @@ agent/
 ├── subagents.ts         # the task tool, agent types, .forge/agents loader
 ├── mcp.ts               # MCP servers: config, trust, connect, tools
 ├── doctor.ts            # forge doctor: setup checks and how to fix each
+├── sandbox.ts           # runs commands in the OS sandbox (macOS Seatbelt, Linux bubblewrap)
 └── providers/
     ├── anthropic.ts     # Claude via Anthropic SDK
     └── openai.ts        # every OpenAI-compatible provider (OpenAI, Gemini, OpenRouter, Ollama, ...)
@@ -904,7 +943,7 @@ model/                   # the project index behind forge init and find_dependen
 verify/chain.ts          # type check → tests → lint
 executor/git.ts          # guarded git helpers
 diff/semantic.ts         # semantic diff grouping
-tests/                   # 291 tests; fixtures/ holds small MCP servers used by them
+tests/                   # 305 tests; fixtures/ holds small MCP servers used by them
 ```
 
 ---
@@ -912,7 +951,7 @@ tests/                   # 291 tests; fixtures/ holds small MCP servers used by 
 ## Tests
 
 ```bash
-npm test               # 291 tests
+npm test               # 305 tests
 ```
 
 `npm audit` reports no known vulnerabilities in Forge's dependencies (as of 2026-11-18). This matters more than usual for an agent: the `glob` tool passes model-written patterns to `glob` and `minimatch`, so a denial-of-service bug in either could let text the model has read hang Forge.
@@ -933,6 +972,7 @@ npm test               # 291 tests
 | `extractor` | 4 | The project indexer: functions and methods, calls across files, constructors, interfaces, never library files |
 | `presets` | 76 | Every action in the table above, under each ready-made policy, loaded from YAML the way Forge loads it; `verify` goes through the policy; `forge doctor` finds no problems in any of them |
 | `telemetry` | 2 | The circuit breaker; refused calls don't trip it |
+| `sandbox` | 14 | Settings and fallbacks, the Linux command line, and on macOS real escape attempts through the `bash` tool: home folder, policy file, audit log, git hooks and config, `~/.ssh`, the internet |
 | `doctor` | 12 | Each setup check against a fake model server: missing model, unreachable server, rejected or missing key (never printed), small window, policy problems, broken `~/.forgerc` |
 | `vscode` | 8 | Message formatting, every command, unsaved files |
 | `usage` | 14 | Model lookup, provider keys, status line, cost, budget |

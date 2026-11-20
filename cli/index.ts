@@ -31,6 +31,7 @@ const HELP = `
   forge config get               Show the current ~/.forgerc
 
   Keys: provider  model  baseUrl  budget  context  priceInput  priceOutput  repoMap  compactAt
+        sandbox (auto|on|off)  sandboxNetwork (on|off)
   Example: forge config set provider ollama
            forge config set model forge-deepseek
 `;

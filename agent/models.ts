@@ -84,6 +84,10 @@ interface ForgeRc {
   repoMap?: number;
   /** Compact the conversation when it passes this share of the context window (0.7 = 70%). 0 turns it off. */
   compactAt?: number;
+  /** Run shell commands in the OS sandbox: auto (when available), on (required), off. */
+  sandbox?: string;
+  /** Whether sandboxed commands may reach the internet ("on" or "off"); this machine is always reachable. */
+  sandboxNetwork?: string;
 }
 
 const RC_PATH = process.env["FORGE_RC"] ?? path.join(os.homedir(), ".forgerc");
@@ -158,6 +162,14 @@ export async function detectContextWindow(env: Record<string, string | undefined
 /** When to compact: FORGE_COMPACT_AT, then ~/.forgerc, then 0.7 (70% of the context window). */
 export function compactAt(env: Record<string, string | undefined> = process.env): number {
   return number(env["FORGE_COMPACT_AT"]) ?? readRc().compactAt ?? 0.7;
+}
+
+/** Sandbox settings: FORGE_SANDBOX / FORGE_SANDBOX_NETWORK, then ~/.forgerc, then auto and on. */
+export function sandboxSettings(env: Record<string, string | undefined> = process.env): { mode: string; network: boolean } {
+  const rc = readRc();
+  const mode = (env["FORGE_SANDBOX"] || rc.sandbox || "auto").toLowerCase();
+  const network = (env["FORGE_SANDBOX_NETWORK"] || rc.sandboxNetwork || "on").toLowerCase();
+  return { mode, network: network !== "off" && network !== "false" && network !== "0" };
 }
 
 /** How many tokens the repo map may use: FORGE_REPO_MAP, then ~/.forgerc, then 1024. */

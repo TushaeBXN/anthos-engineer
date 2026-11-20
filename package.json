@@ -41,7 +41,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsx cli/index.ts",
-    "test": "FORGE_RC=/nonexistent FORGE_HOME=/nonexistent node --import tsx/esm --test tests/**/*.test.ts",
+    "test": "FORGE_RC=/nonexistent FORGE_HOME=/nonexistent FORGE_AUDIT_DB=:memory: node --import tsx/esm --test tests/**/*.test.ts",
     "demo": "node --import tsx/esm demo/server.ts",
     "prepublishOnly": "npm run build && npm test"
   },

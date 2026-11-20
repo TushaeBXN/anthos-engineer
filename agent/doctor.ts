@@ -10,6 +10,7 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { RC_PATH, detectContextWindow, rcProblem, resolveModel, type ModelInfo } from "./models.js";
 import { loadPolicy } from "../policy/parser.js";
+import { sandboxStatus } from "./sandbox.js";
 
 export type CheckState = "ok" | "warn" | "fail";
 
@@ -56,7 +57,7 @@ export async function runDoctor(options: DoctorOptions): Promise<Check[]> {
     if (server?.state !== "fail") checks.push(await contextWindow(info, env));
   }
 
-  checks.push(policy(options.cwd), folder(options.cwd), git(options.cwd), index(options.cwd));
+  checks.push(policy(options.cwd), sandbox(env), folder(options.cwd), git(options.cwd), index(options.cwd));
   if (options.mcp !== false) checks.push(...(await mcp(options.cwd)));
   checks.push(await engram(options.engramUrl ?? "http://127.0.0.1:7742"));
   return checks;
@@ -143,6 +144,20 @@ function policy(cwd: string): Check {
   } catch (err) {
     return { name, state: "fail", detail: `forge.policy.yaml can't be read: ${(err as Error).message}`, fix: "Fix the YAML; until then Forge won't start in this folder" };
   }
+}
+
+function sandbox(env: Record<string, string | undefined>): Check {
+  const s = sandboxStatus(env);
+  const name = "Sandbox";
+  if (s.active) {
+    const how = s.kind === "seatbelt" ? "macOS Seatbelt" : "bubblewrap";
+    return { name, state: "ok", detail: `${how}: commands write only in the project and temp folders${s.network ? "" : ", no internet"}` };
+  }
+  if (s.inside) return { name, state: "ok", detail: "already inside Forge's sandbox" };
+  if (s.mode === "off") return { name, state: "warn", detail: "off: an approved command can change anything your account can", fix: "forge config set sandbox auto" };
+  return s.mode === "on"
+    ? { name, state: "fail", detail: `required, but ${s.reason}; commands won't run`, fix: s.reason?.includes("bubblewrap") ? "Install bubblewrap" : "forge config set sandbox auto" }
+    : { name, state: "warn", detail: `not available: ${s.reason}; commands run with your account's full access`, fix: s.reason?.includes("bubblewrap") ? "Install bubblewrap" : undefined };
 }
 
 function folder(cwd: string): Check {

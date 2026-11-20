@@ -193,7 +193,7 @@ ${GIT_READS}
   },
   {
     name: "full-access",
-    summary: "Does anything without asking, except touch credentials or force-push. Only for a throwaway machine or container.",
+    summary: "Does anything without asking, except touch credentials, force-push, or run commands with > or $(...), which still ask. Only for a throwaway machine or container.",
     yaml: `${HEADER("full-access", "Forge does anything without asking: edits, shell commands, git, web, MCP. Use it only where nothing can be lost.")}default: allow
 
 rules:
