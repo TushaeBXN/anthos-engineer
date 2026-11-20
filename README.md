@@ -1063,6 +1063,12 @@ For maintainers. Publishing to npm needs two-factor authentication on the npm ac
    git commit -am "Set version to 0.2.0" && git push
    ```
 
+   Then wait for CI to pass on that commit. `npm publish` on a Mac runs only the Mac's tests; the Linux sandbox tests run only in CI. CI failed on every push from the sandbox commit until after 0.4.0 was published, and nobody noticed until the Linux tests were looked at:
+
+   ```bash
+   gh run watch "$(gh run list -w ci.yml -b main -L 1 --json databaseId -q '.[0].databaseId')" --exit-status
+   ```
+
 3. **Publish to npm.** This builds and runs every test first, then opens your browser to confirm with 2FA:
 
    ```bash
