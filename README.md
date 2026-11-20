@@ -433,13 +433,13 @@ A dash means I haven't confirmed it either way. Claude Code and OpenClaude are f
 | Feature | Tests | Run for real |
 |---|---|---|
 | Agent loop, policy, audit, undo | Yes | Yes, on `forge-deepseek` |
-| `forge --version`, unknown options | Yes — the version matches `package.json`; a misspelled flag is an error, not a request | Yes — the built command printed its version and refused `--bogus` |
+| `forge --version`, unknown options | Yes — the version matches `package.json`; a misspelled flag is an error, not a request | Yes — 0.4.3 installed fresh from npm printed `0.4.3` and refused `--bogus` |
 | Web search and fetch | Yes, including a local server for redirects | Yes — live search, live fetch, and a deny rule blocking a host |
 | Repo map | Yes | Yes — answered a code question from the map alone |
 | Project index | Yes — imports of every kind, methods, constructors, interfaces, name clashes | Yes — indexed Forge itself: 30 methods, 236 call links, none pointing at nothing |
 | Sub-agents | Yes, including two in parallel | Yes — `explore` found the right file and line |
 | gRPC server | Yes, over a real connection | Yes — `forge serve` + the example client |
-| 13 providers | Key handling and addresses | Ollama and **Anthropic** (`claude-opus-5-5`): a real session read a file, found two bugs, edited the file and ran the tests after approval, for 5k tokens and $0.04. It found two bugs in Forge, both fixed in 0.4.3: `FORGE_PROVIDER` kept the saved Ollama model, and a command sent with an edit ran before it. The other hosted addresses answered; **no real conversation on them yet** (needs each provider's key) |
+| 13 providers | Key handling and addresses | Ollama and **Anthropic** (`claude-opus-5-5`): a real session read a file, found two bugs, edited the file and ran the tests after approval, for 5k tokens and $0.04. It found two bugs in Forge, both fixed in 0.4.3: `FORGE_PROVIDER` kept the saved Ollama model, and a command sent with an edit ran before it. Installed fresh from npm, 0.4.3's `forge doctor` picks `claude-opus-5-5` with `FORGE_PROVIDER=anthropic` and keeps the saved Ollama model without it. The other hosted addresses answered; **no real conversation on them yet** (needs each provider's key) |
 | VS Code extension | Yes, against a stand-in VS Code API; packages with `vsce` | **Not yet run in VS Code** |
 | Context compaction | Yes — trigger, carry-over, both providers' summary requests, fallback | Yes on `forge-deepseek`: compacted once mid-task (7.8k → 1.7k) and still answered correctly |
 | Streaming | Yes — local servers speaking the OpenAI and Anthropic stream formats | Yes on `forge-deepseek`: a reply arrived in 77 pieces over 6 s, and a turn with a tool call streamed too. On Anthropic, the session above ran over the streaming API, tool calls included |
@@ -447,7 +447,7 @@ A dash means I haven't confirmed it either way. Claude Code and OpenClaude are f
 | MCP | Yes, against a real MCP server (`tests/fixtures/mcp-server.ts`) | Yes — `forge-deepseek` used a server's tool; a tool with no rule was refused |
 | `forge doctor` | Yes, against a fake model server | Yes — on this Ollama setup, and on broken ones: invalid config, missing model, stopped server, missing key, and a fake key the real Anthropic API rejected |
 | Ready-made policies | Yes — every action under each policy | Yes on `forge-deepseek`: `read-only` refused every edit and command; `workspace-write` made the fix and refused unapproved commands. Installed fresh from npm and written with `forge policy use` |
-| Sandbox | Yes — settings and fallbacks, plus real escape attempts through the `bash` tool on macOS and on Linux (Ubuntu, in CI on every push) | Yes on `forge-deepseek` under `full-access`, so only the sandbox could stop anything: a write to the home folder was blocked, one in the project worked. Installed fresh from npm (0.4.2), `forge doctor` reports it active, and the installed `bash` tool's `git init` in an empty folder was blocked, leaving the folder empty. On Linux, the escape tests pass on GitHub's Ubuntu machines; **not yet run with a model on Linux** |
+| Sandbox | Yes — settings and fallbacks, plus real escape attempts through the `bash` tool on macOS and on Linux (Ubuntu, in CI on every push) | Yes on `forge-deepseek` under `full-access`, so only the sandbox could stop anything: a write to the home folder was blocked, one in the project worked. Installed fresh from npm (0.4.2, and again 0.4.3), `forge doctor` reports it active, and the installed `bash` tool's `git init` in an empty folder was blocked, leaving the folder empty. On Linux, the escape tests pass on GitHub's Ubuntu machines; **not yet run with a model on Linux** |
 
 ---
 
