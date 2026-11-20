@@ -419,6 +419,8 @@ A dash means I haven't confirmed it either way. Claude Code and OpenClaude are f
 | Streaming | Yes — local servers speaking the OpenAI and Anthropic stream formats | Yes on `forge-deepseek`: a reply arrived in 77 pieces over 6 s, and a turn with a tool call streamed too. **Anthropic not yet run live** (no key here) |
 | Xcode (through MCP) | Yes, against a server that replies the way Xcode's bridge does | **Not yet run with real Xcode** |
 | MCP | Yes, against a real MCP server (`tests/fixtures/mcp-server.ts`) | Yes — `forge-deepseek` used a server's tool; a tool with no rule was refused |
+| `forge doctor` | Yes, against a fake model server | Yes — on this Ollama setup, and on broken ones: invalid config, missing model, stopped server, missing key, and a fake key the real Anthropic API rejected |
+| Ready-made policies | Yes — every action under each policy | Yes on `forge-deepseek`: `read-only` refused every edit and command; `workspace-write` made the fix and refused unapproved commands. Installed fresh from npm and written with `forge policy use` |
 
 ---
 
@@ -923,6 +925,11 @@ npm install -g forge-anthos-intelligence@latest
 | [0.3.0](https://github.com/TushaeBXN/anthos-engineer/releases/tag/v0.3.0) | 2026-11-20 | [Ready-made policies](#ready-made-policies) (`forge policy use`); `verify` now goes through the policy; fixes for chained commands, the circuit breaker and empty replies |
 | [0.2.0](https://github.com/TushaeBXN/anthos-engineer/releases/tag/v0.2.0) | 2026-11-20 | [`forge doctor`](#checking-your-setup): checks the setup and says how to fix each problem |
 | [0.1.0](https://github.com/TushaeBXN/anthos-engineer/releases/tag/v0.1.0) | 2026-11-19 | First release: the agent loop and policy, 13 providers, MCP, sub-agents, streaming, compaction, repo map, project index, gRPC, VS Code |
+
+**Updating from 0.2.0 or earlier:**
+- If a project has no `forge.policy.yaml`, run `forge policy use workspace-write` there; until then Forge asks before every action.
+- `verify` is now checked as the commands it runs (`npx tsc`, `npm test`, `npx eslint`). If your policy has no rule for them, it asks before running; add shell rules for the ones you trust.
+- If your own policy uses `target: "**"` to mean the project, it also covers files outside it, such as `~/.ssh`. See [Rule order matters](#ready-made-policies).
 
 The VS Code extension is versioned on its own and is still 0.1.0; every release has it attached, so the [latest release](https://github.com/TushaeBXN/anthos-engineer/releases/latest) always has a copy.
 
