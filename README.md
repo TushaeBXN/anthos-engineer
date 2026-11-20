@@ -38,6 +38,8 @@ ollama create forge-deepseek -f /tmp/Modelfile
 npm install -g forge-anthos-intelligence
 ```
 
+Newer npm may warn that `protobufjs` "has install scripts not yet covered by allowScripts". Forge doesn't need that script; you can ignore the warning.
+
 ```bash
 # 4. Save your model settings once — survives terminal restarts
 forge config set provider ollama
@@ -63,6 +65,14 @@ export ANTHROPIC_API_KEY=sk-ant-...
 forge policy use workspace-write    # in your project folder
 forge
 ```
+
+To keep the key off the screen and out of your shell history, enter it this way instead of `export ANTHROPIC_API_KEY=...`: run the line below, paste the key (nothing shows), and press Enter. It lasts until you close that terminal.
+
+```bash
+read -s ANTHROPIC_API_KEY && export ANTHROPIC_API_KEY
+```
+
+To try Claude once without changing your saved provider, use `FORGE_PROVIDER=anthropic forge`. Forge then uses Claude's default model, not the model saved for your usual provider.
 
 Any other provider works the same way: `forge providers` lists them all and the key each one needs.
 
@@ -635,11 +645,23 @@ On Windows and Linux, `Cmd+Alt+F` is `Ctrl+Alt+F`. Forge reads files from disk, 
 **Install:**
 
 1. Install the `forge` command: `npm install -g forge-anthos-intelligence`
-2. Download the `forge-vscode-*.vsix` file from the [latest release](https://github.com/TushaeBXN/anthos-engineer/releases/latest), then install it, using the version you downloaded:
+2. Download the `forge-vscode-*.vsix` file from the [latest release](https://github.com/TushaeBXN/anthos-engineer/releases/latest), or with the GitHub CLI:
 
-```bash
-code --install-extension forge-vscode-0.1.1.vsix
-```
+   ```bash
+   gh release download -R TushaeBXN/anthos-engineer -p "forge-vscode-*.vsix" -D ~/Downloads
+   ```
+
+3. Install it, using the version you downloaded:
+
+   ```bash
+   code --install-extension ~/Downloads/forge-vscode-0.1.1.vsix
+   ```
+
+   If that says `code: command not found`, VS Code's command isn't on your PATH. Either use its full path on a Mac, `"/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code"`, or add it once: in VS Code press `Cmd+Shift+P` and run **Shell Command: Install 'code' command in PATH**. A `url.parse()` deprecation warning comes from VS Code's installer, not Forge.
+
+4. If VS Code was open, reload it (`Cmd+Shift+P`, **Developer: Reload Window**). A **Forge** button appears in the status bar.
+
+Questions go in the box that opens at the top of the window, not in VS Code's Search panel or the terminal: text typed straight into the terminal reaches Forge without the file and line in front of it.
 
 To build the extension yourself instead: `cd vscode-extension && npx @vscode/vsce package`. `vsce` fails if the folder's path contains a space; copy the folder somewhere without one first.
 
@@ -1112,7 +1134,7 @@ For maintainers. Publishing to npm needs two-factor authentication on the npm ac
 
    npm may say "Your package is being processed and may take a few minutes to become available." That's normal: 0.2.0 took about 40 seconds to appear.
 
-4. **Create the GitHub release** with notes on what changed, once `npm publish` has succeeded, so the tag points at the commit that was published. Moving a tag later means deleting a public one. Tag the commit first and push the tag; `gh release create --target <commit>` refuses a bare commit ID. Attach the VS Code extension every time, so the latest release always has it. If the extension changed, build a new one with `cd vscode-extension && npx @vscode/vsce package`; if not, download the current one from the previous release:
+4. **Create the GitHub release** with notes on what changed, once `npm publish` has succeeded, so the tag points at the commit that was published. Moving a tag later means deleting a public one. Tag the commit first and push the tag; `gh release create --target <commit>` refuses a bare commit ID. Attach the VS Code extension every time, so the latest release always has it. If the extension changed, run `node tests/vscode-real/run.mjs`, raise its version, and build a new one with `cd vscode-extension && npx @vscode/vsce package` (from a path without spaces); if not, download the current one from the previous release:
 
    ```bash
    git tag v0.2.0 && git push origin v0.2.0   # the commit you published
