@@ -99,6 +99,16 @@ describe("sandbox — settings", () => {
     assert.equal(sandboxHint("Error: tests failed", on), "");
     assert.equal(sandboxHint("Operation not permitted", { ...on, active: false }), "");
   });
+
+  test("when a protected file inside the project is what was blocked, the hint says so", () => {
+    const on = { mode: "auto" as const, active: true, kind: "seatbelt" as const, network: true };
+    assert.match(sandboxHint("/p/.git/hooks/: Operation not permitted", on), /git init/);
+    assert.match(sandboxHint("sh: forge.policy.yaml: Read-only file system", on), /can't change forge\.policy\.yaml/);
+    assert.match(sandboxHint("mv: cannot move '.git' to '.git-old': Device or resource busy", on), /move, remove or create \.git/);
+    assert.doesNotMatch(sandboxHint("touch: /Users/x/a.txt: Operation not permitted", on), /git init/);
+    // .github isn't .git
+    assert.doesNotMatch(sandboxHint("/p/.github/x: Operation not permitted", on), /git init/);
+  });
 });
 
 // The real thing, on a Mac: escape attempts through Forge's own bash tool.
@@ -173,7 +183,9 @@ describe("sandbox — macOS, for real", { skip: !mac ? "needs macOS" : inside ? 
     const bare = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "forge-bare-")));
     try {
       assert.equal((await bash.run({ command: "echo 'default: allow' > forge.policy.yaml" }, bare)).isError, true);
-      assert.equal((await bash.run({ command: "git init -q" }, bare)).isError, true);
+      const init = await bash.run({ command: "git init -q" }, bare);
+      assert.equal(init.isError, true);
+      assert.match(init.output, /git init.*are blocked/);
       assert.equal(fs.existsSync(path.join(bare, "forge.policy.yaml")), false);
       assert.equal(fs.existsSync(path.join(bare, ".git", "hooks")), false);
     } finally {
@@ -278,7 +290,9 @@ describe("sandbox — Linux, for real", { skip: !linux ? "needs Linux" : inside 
   });
 
   it(".git and .forge can't be moved aside and replaced", async () => {
-    assert.equal((await run("mv .git .git-old")).isError, true);
+    const moved = await run("mv .git .git-old");
+    assert.equal(moved.isError, true);
+    assert.match(moved.output, /move, remove or create \.git/, moved.output);
     assert.equal((await run("mv .forge .forge-old")).isError, true);
     assert.equal(fs.existsSync(path.join(cwd, ".git-old")), false);
     assert.equal(fs.statSync(path.join(cwd, ".git")).isDirectory(), true);
