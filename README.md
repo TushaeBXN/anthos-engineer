@@ -423,6 +423,7 @@ A dash means I haven't confirmed it either way. Claude Code and OpenClaude are f
 | MCP | Yes, against a real MCP server (`tests/fixtures/mcp-server.ts`) | Yes — `forge-deepseek` used a server's tool; a tool with no rule was refused |
 | `forge doctor` | Yes, against a fake model server | Yes — on this Ollama setup, and on broken ones: invalid config, missing model, stopped server, missing key, and a fake key the real Anthropic API rejected |
 | Ready-made policies | Yes — every action under each policy | Yes on `forge-deepseek`: `read-only` refused every edit and command; `workspace-write` made the fix and refused unapproved commands. Installed fresh from npm and written with `forge policy use` |
+| Sandbox | Yes — settings, fallbacks and the Linux command line; on macOS, real escape attempts through the `bash` tool | Yes on `forge-deepseek` under `full-access`, so only the sandbox could stop anything: a write to the home folder was blocked, one in the project worked. Installed fresh from npm, `forge doctor` reports it active. **Linux not yet run on a real machine** |
 
 ---
 
@@ -976,7 +977,7 @@ npm test               # 305 tests
 | `doctor` | 12 | Each setup check against a fake model server: missing model, unreachable server, rejected or missing key (never printed), small window, policy problems, broken `~/.forgerc` |
 | `vscode` | 8 | Message formatting, every command, unsaved files |
 | `usage` | 14 | Model lookup, provider keys, status line, cost, budget |
-| `git-executor` | 19 | Branch names, protected branches, verification gate |
+| `git-executor` | 19 | Branch names, protected branches, verification gate. Uses its own policy, not this repo's |
 | `diff` | 14 | Category grouping, blast radius |
 | `verify` | 5 | Stages, skip conditions |
 
@@ -1001,6 +1002,8 @@ npm install -g forge-anthos-intelligence@latest
 | [0.2.0](https://github.com/TushaeBXN/anthos-engineer/releases/tag/v0.2.0) | 2026-11-20 | [`forge doctor`](#checking-your-setup): checks the setup and says how to fix each problem |
 | [0.1.0](https://github.com/TushaeBXN/anthos-engineer/releases/tag/v0.1.0) | 2026-11-19 | First release: the agent loop and policy, 13 providers, MCP, sub-agents, streaming, compaction, repo map, project index, gRPC, VS Code |
 
+The v0.4.0 tag points at `099be44`, one commit before a fix to a test file; the published code is the same.
+
 **Updating from 0.3.0:**
 - Commands now run in the sandbox wherever the system supports it. A command that wrote outside the project (a global install, a file in your home folder) now fails; run it yourself, or turn the sandbox off with `forge config set sandbox off`.
 - `git push` over SSH from inside Forge fails, because the sandbox hides `~/.ssh`. Push yourself, or use an HTTPS remote.
@@ -1024,7 +1027,7 @@ For maintainers. Publishing to npm needs two-factor authentication on the npm ac
    git pull && npm install
    ```
 
-   Before publishing, `npm pack --dry-run` lists exactly which files will go into the package.
+   Before publishing, `npm pack --dry-run` lists exactly which files will go into the package, and `npm test` shows whether publishing will get past the tests. Run the tests in this folder, not only in the one you work in: a test can pass in one folder and fail in another. For 0.4.0, a test passed in a folder whose path had a space in it and failed in the publish folder.
 
 2. **Set the new version** and push it:
 
@@ -1039,12 +1042,14 @@ For maintainers. Publishing to npm needs two-factor authentication on the npm ac
    npm publish
    ```
 
+   If a test fails, npm stops and publishes nothing; the version number is still free. Fix it in your working copy, push, run `git pull` in this folder, and publish again.
+
    npm may say "Your package is being processed and may take a few minutes to become available." That's normal: 0.2.0 took about 40 seconds to appear.
 
-4. **Create the GitHub release** with notes on what changed. Tag the version commit first and push the tag; `gh release create --target <commit>` refuses a bare commit ID. Attach the VS Code extension every time, so the latest release always has it. If the extension changed, build a new one with `cd vscode-extension && npx @vscode/vsce package`; if not, download the current one from the previous release:
+4. **Create the GitHub release** with notes on what changed, once `npm publish` has succeeded, so the tag points at the commit that was published. Moving a tag later means deleting a public one. Tag the commit first and push the tag; `gh release create --target <commit>` refuses a bare commit ID. Attach the VS Code extension every time, so the latest release always has it. If the extension changed, build a new one with `cd vscode-extension && npx @vscode/vsce package`; if not, download the current one from the previous release:
 
    ```bash
-   git tag v0.2.0 && git push origin v0.2.0
+   git tag v0.2.0 && git push origin v0.2.0   # the commit you published
    gh release download v0.1.0 -p "forge-vscode-*.vsix"
    gh release create v0.2.0 --verify-tag --title "Forge v0.2.0" --notes-file notes.md forge-vscode-0.1.0.vsix
    ```
