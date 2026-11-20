@@ -410,7 +410,7 @@ A dash means I haven't confirmed it either way. Claude Code and OpenClaude are f
 
 [claw-code](https://github.com/ultraworkers/claw-code) is an open-source coding agent written in Rust, modeled on Claude Code. Forge's sandbox was built from the same idea, with its own code. This comparison is from claw-code's code and commits as of 2026-11-20 (release v0.1.13, 2026-11-09); I haven't run claw-code.
 
-| | Forge 0.4.2 | claw-code v0.1.13 |
+| | Forge 0.4.3 | claw-code v0.1.13 |
 |---|---|---|
 | Permission levels | A rule for each resource, action and target (allow, ask or deny), plus three ready-made presets | Three fixed modes: read-only, workspace-write, danger-full-access |
 | Sandbox on macOS | Yes (Seatbelt), escape tests run for real | No, Linux only |
@@ -433,7 +433,7 @@ A dash means I haven't confirmed it either way. Claude Code and OpenClaude are f
 | Feature | Tests | Run for real |
 |---|---|---|
 | Agent loop, policy, audit, undo | Yes | Yes, on `forge-deepseek` |
-| `forge --version`, unknown options | Yes — the version matches `package.json`; a misspelled flag is an error, not a request | Yes — the built command printed `0.4.2` and refused `--bogus` (on `main`, not yet released) |
+| `forge --version`, unknown options | Yes — the version matches `package.json`; a misspelled flag is an error, not a request | Yes — the built command printed its version and refused `--bogus` |
 | Web search and fetch | Yes, including a local server for redirects | Yes — live search, live fetch, and a deny rule blocking a host |
 | Repo map | Yes | Yes — answered a code question from the map alone |
 | Project index | Yes — imports of every kind, methods, constructors, interfaces, name clashes | Yes — indexed Forge itself: 30 methods, 236 call links, none pointing at nothing |
@@ -1020,7 +1020,7 @@ Tests never read your `~/.forgerc`, so they give the same result on any machine.
 
 ## Releases
 
-The current version is **0.4.2**. Each release is on the [releases page](https://github.com/TushaeBXN/anthos-engineer/releases), with notes on what changed and the VS Code extension attached, and on [npm](https://www.npmjs.com/package/forge-anthos-intelligence).
+The current version is **0.4.3**. Each release is on the [releases page](https://github.com/TushaeBXN/anthos-engineer/releases), with notes on what changed and the VS Code extension attached, and on [npm](https://www.npmjs.com/package/forge-anthos-intelligence).
 
 To update to the newest release:
 
@@ -1030,6 +1030,7 @@ npm install -g forge-anthos-intelligence@latest
 
 | Version | Date | What's new |
 |---|---|---|
+| [0.4.3](https://github.com/TushaeBXN/anthos-engineer/releases/tag/v0.4.3) | 2026-11-20 | `forge --version`; misspelled options are errors instead of requests; the sandbox hint names the protected files |
 | [0.4.2](https://github.com/TushaeBXN/anthos-engineer/releases/tag/v0.4.2) | 2026-11-20 | Sandbox fixes: commands can no longer swap `.git` for another, or create a policy file or repo where there was none |
 | [0.4.1](https://github.com/TushaeBXN/anthos-engineer/releases/tag/v0.4.1) | 2026-11-20 | The Linux sandbox, tested for real on Ubuntu; Forge checks that bubblewrap can start before using it |
 | [0.4.0](https://github.com/TushaeBXN/anthos-engineer/releases/tag/v0.4.0) | 2026-11-20 | [Sandbox](#sandbox): commands run in macOS Seatbelt or Linux bubblewrap and can write only inside the project |
@@ -1037,9 +1038,7 @@ npm install -g forge-anthos-intelligence@latest
 | [0.2.0](https://github.com/TushaeBXN/anthos-engineer/releases/tag/v0.2.0) | 2026-11-20 | [`forge doctor`](#checking-your-setup): checks the setup and says how to fix each problem |
 | [0.1.0](https://github.com/TushaeBXN/anthos-engineer/releases/tag/v0.1.0) | 2026-11-19 | First release: the agent loop and policy, 13 providers, MCP, sub-agents, streaming, compaction, repo map, project index, gRPC, VS Code |
 
-**Not yet released** (on `main`, in the next version):
-- When the sandbox blocks a protected file inside the project, such as `git init` or a write to `forge.policy.yaml`, the hint to the model names the protected files instead of saying commands can write only in the project.
-- `forge --version` (or `-v`) prints the version. Before, Forge took it as a request and sent it to the model. Any other unknown option, such as a misspelled flag, is now an error instead of a request.
+**Updating from 0.4.2:** an option Forge doesn't know, such as `forge --verison`, now stops with an error. Before, it was sent to the model as a request.
 
 The v0.4.0 tag points at `099be44`, one commit before a fix to a test file; the published code is the same.
 
