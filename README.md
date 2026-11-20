@@ -409,7 +409,7 @@ A dash means I haven't confirmed it either way. Claude Code and OpenClaude are f
 
 [claw-code](https://github.com/ultraworkers/claw-code) is an open-source coding agent written in Rust, modeled on Claude Code. Forge's sandbox was built from the same idea, with its own code. This comparison is from claw-code's code and commits as of 2026-11-20 (release v0.1.13, 2026-11-09); I haven't run claw-code.
 
-| | Forge 0.4.1 | claw-code v0.1.13 |
+| | Forge 0.4.2 | claw-code v0.1.13 |
 |---|---|---|
 | Permission levels | A rule for each resource, action and target (allow, ask or deny), plus three ready-made presets | Three fixed modes: read-only, workspace-write, danger-full-access |
 | Sandbox on macOS | Yes (Seatbelt), escape tests run for real | No, Linux only |
@@ -417,12 +417,13 @@ A dash means I haven't confirmed it either way. Claude Code and OpenClaude are f
 | Checks the sandbox can start before using it | Yes: tries bubblewrap once; `forge doctor` says why if it can't | Yes: tries the ways `unshare` can start before using one |
 | Policy file, audit log and git hooks protected from commands | Yes, including swapping `.git` for another and creating them where they don't exist yet | No |
 | `~/.ssh`, `~/.aws`, `~/.gnupg` | Hidden from commands, and denied by every preset | Not blocked by the sandbox |
+| Telling the model why something was blocked | The policy's reason, and a sandbox hint; on `main`, the hint names the protected files | Its permission checks give a reason, such as a path being outside the workspace |
 | Record of every permission decision | Yes, a local audit log | None found |
 | Setup check | `forge doctor` | `doctor` |
 | Written in | TypeScript (Node.js) | Rust, one program to install |
 | Windows | Not supported by the sandbox; not tested | Supported |
 | Built-in tools | Files, search, shell, web, verify, sub-agents, memory | More, including notebook editing |
-| Community | New, one maintainer | 194,760 stars and 107,204 forks, frequent releases |
+| Community | New, one maintainer | 194,760 stars and 107,203 forks; releases every few days until v0.1.13 (2026-11-09) |
 
 **In short:** claw-code reaches further: more tools, Windows, and far more people using it, so more of it has been tried in practice. Forge goes further on control: per-rule permissions, a record of every decision, and a sandbox that also works on a Mac and protects its own rules. Some Forge features still haven't been run for real, including a session with a model on Linux; see the next table.
 
