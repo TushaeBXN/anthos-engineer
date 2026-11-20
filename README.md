@@ -910,7 +910,7 @@ Tests never read your `~/.forgerc`, so they give the same result on any machine.
 
 ## Releases
 
-The current version is **0.2.0**. Each release is on the [releases page](https://github.com/TushaeBXN/anthos-engineer/releases), with notes on what changed and the VS Code extension attached, and on [npm](https://www.npmjs.com/package/forge-anthos-intelligence).
+The current version is **0.3.0**. Each release is on the [releases page](https://github.com/TushaeBXN/anthos-engineer/releases), with notes on what changed and the VS Code extension attached, and on [npm](https://www.npmjs.com/package/forge-anthos-intelligence).
 
 To update to the newest release:
 
@@ -920,6 +920,7 @@ npm install -g forge-anthos-intelligence@latest
 
 | Version | Date | What's new |
 |---|---|---|
+| [0.3.0](https://github.com/TushaeBXN/anthos-engineer/releases/tag/v0.3.0) | 2026-11-20 | [Ready-made policies](#ready-made-policies) (`forge policy use`); `verify` now goes through the policy; fixes for chained commands, the circuit breaker and empty replies |
 | [0.2.0](https://github.com/TushaeBXN/anthos-engineer/releases/tag/v0.2.0) | 2026-11-20 | [`forge doctor`](#checking-your-setup): checks the setup and says how to fix each problem |
 | [0.1.0](https://github.com/TushaeBXN/anthos-engineer/releases/tag/v0.1.0) | 2026-11-19 | First release: the agent loop and policy, 13 providers, MCP, sub-agents, streaming, compaction, repo map, project index, gRPC, VS Code |
 

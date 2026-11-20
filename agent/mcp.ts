@@ -93,7 +93,7 @@ export async function connectMcp(cwd: string, options: McpOptions = {}): Promise
   const tools: Tool[] = [];
   const results = await Promise.all(
     toStart.map(async ({ name, config, source }) => {
-      const client = new Client({ name: "forge", version: "0.2.0" });
+      const client = new Client({ name: "forge", version: "0.3.0" });
       try {
         await withTimeout(connect(client, name, config, cwd), CONNECT_TIMEOUT_MS, `${name} did not start within ${CONNECT_TIMEOUT_MS / 1000}s`);
         clients.push(client);
