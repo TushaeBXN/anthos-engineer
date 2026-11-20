@@ -444,7 +444,7 @@ A dash means I haven't confirmed it either way. Claude Code and OpenClaude are f
 | MCP | Yes, against a real MCP server (`tests/fixtures/mcp-server.ts`) | Yes — `forge-deepseek` used a server's tool; a tool with no rule was refused |
 | `forge doctor` | Yes, against a fake model server | Yes — on this Ollama setup, and on broken ones: invalid config, missing model, stopped server, missing key, and a fake key the real Anthropic API rejected |
 | Ready-made policies | Yes — every action under each policy | Yes on `forge-deepseek`: `read-only` refused every edit and command; `workspace-write` made the fix and refused unapproved commands. Installed fresh from npm and written with `forge policy use` |
-| Sandbox | Yes — settings and fallbacks, plus real escape attempts through the `bash` tool on macOS and on Linux (Ubuntu, in CI on every push) | Yes on `forge-deepseek` under `full-access`, so only the sandbox could stop anything: a write to the home folder was blocked, one in the project worked. Installed fresh from npm, `forge doctor` reports it active. On Linux, the escape tests pass on GitHub's Ubuntu machines; **not yet run with a model on Linux** |
+| Sandbox | Yes — settings and fallbacks, plus real escape attempts through the `bash` tool on macOS and on Linux (Ubuntu, in CI on every push) | Yes on `forge-deepseek` under `full-access`, so only the sandbox could stop anything: a write to the home folder was blocked, one in the project worked. Installed fresh from npm (0.4.2), `forge doctor` reports it active, and the installed `bash` tool's `git init` in an empty folder was blocked, leaving the folder empty. On Linux, the escape tests pass on GitHub's Ubuntu machines; **not yet run with a model on Linux** |
 
 ---
 
@@ -600,7 +600,7 @@ forge config set sandbox off            # turn it off
 forge config set sandboxNetwork off     # sandboxed commands can't reach the internet
 ```
 
-`forge doctor` shows whether it's on. When a command fails because of it, Forge tells the model so, and the model can ask you to run that command yourself. `git push` over SSH needs your SSH key, which the sandbox hides, so push yourself or use HTTPS.
+`forge doctor` shows whether it's on. When a command fails because of it, Forge tells the model so, and the model can ask you to run that command yourself. The hint says commands can write only in the project and temp folders, so when what was blocked is a protected file inside the project (`git init`, say), it doesn't yet name the real reason. `git push` over SSH needs your SSH key, which the sandbox hides, so push yourself or use HTTPS.
 
 **What it covers, and what it doesn't.** It covers commands Forge runs. Forge's own `read`, `write` and `edit` tools run inside Forge and are covered by the policy instead. MCP servers are started by you, from your config, and aren't sandboxed. The sandbox limits *where* a command can write, not *what*: a command can still change a file in the project that runs later, such as a test script or a Makefile, which is one more reason to review the diff.
 
