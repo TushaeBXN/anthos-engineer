@@ -8,6 +8,7 @@ import path from "node:path";
 import type { AddressInfo } from "node:net";
 import { sandboxStatus, sandboxed, sandboxHint } from "../agent/sandbox.js";
 import { bash } from "../tools/bash.js";
+import { sandboxSettings } from "../agent/models.js";
 
 const env = (vars: Record<string, string>) => ({ ...vars });
 
@@ -39,8 +40,9 @@ describe("sandbox — settings", () => {
   });
 
   test("network off: only on request", () => {
-    assert.equal(sandboxStatus(env({}), "darwin").network, true);
-    assert.equal(sandboxStatus(env({ FORGE_SANDBOX_NETWORK: "off" }), "darwin").network, false);
+    // Settings alone, so this runs the same on every OS.
+    assert.equal(sandboxSettings(env({})).network, true);
+    assert.equal(sandboxSettings(env({ FORGE_SANDBOX_NETWORK: "off" })).network, false);
   });
 
   test("bubblewrap on Linux: the project is writable, the rest read-only, credentials hidden", () => {
@@ -135,6 +137,102 @@ describe("sandbox — macOS, for real", { skip: !mac ? "needs macOS" : inside ? 
       assert.equal((await run(`curl -s -m 5 ${local}`)).output, "local ok");
       const internet = await run("curl -s -m 5 -o /dev/null https://example.com");
       assert.equal(internet.isError, true);
+    } finally {
+      delete process.env["FORGE_SANDBOX_NETWORK"];
+    }
+  });
+});
+
+// The real thing, on Linux: the same escape attempts, through bubblewrap.
+// CI sets FORGE_REQUIRE_LINUX_SANDBOX=1, so a sandbox that can't start fails the run instead of skipping.
+const linux = process.platform === "linux";
+const linuxStatus = linux && !inside ? sandboxStatus() : null;
+
+describe("sandbox — Linux, for real", { skip: !linux ? "needs Linux" : inside ? "already inside Forge's sandbox" : false }, () => {
+  let cwd = "";
+  let home = "";
+  let server: http.Server;
+  let local = "";
+  const savedHome = process.env["HOME"];
+  const run = async (command: string) => bash.run({ command }, cwd);
+
+  before(async () => {
+    if (!linuxStatus?.active) {
+      if (process.env["FORGE_REQUIRE_LINUX_SANDBOX"] === "1") throw new Error(`bubblewrap sandbox not active: ${linuxStatus?.reason}`);
+      return;
+    }
+    // A home folder of our own, with a fake key in it, so the test never touches a real ~/.ssh.
+    home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "forge-home-")));
+    fs.mkdirSync(path.join(home, ".ssh"));
+    fs.writeFileSync(path.join(home, ".ssh", "id_test"), "SECRET-KEY");
+    process.env["HOME"] = home;
+    // The project lives outside /tmp too, so "outside the project" isn't just another temp folder.
+    cwd = fs.realpathSync(fs.mkdtempSync(path.join(home, "project-")));
+    execFileSync("git", ["init", "-q"], { cwd });
+    fs.mkdirSync(path.join(cwd, ".forge"));
+    fs.writeFileSync(path.join(cwd, ".forge", "audit.db"), "");
+    fs.writeFileSync(path.join(cwd, "forge.policy.yaml"), "version: 1\n");
+    server = http.createServer((_req, res) => res.end("local ok"));
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    local = `http://127.0.0.1:${(server.address() as AddressInfo).port}/`;
+  });
+  after(() => {
+    server?.close();
+    if (savedHome === undefined) delete process.env["HOME"];
+    else process.env["HOME"] = savedHome;
+    if (home) fs.rmSync(home, { recursive: true, force: true });
+    delete process.env["FORGE_SANDBOX_NETWORK"];
+  });
+
+  const it = (name: string, fn: () => Promise<void>) => test(name, { skip: linuxStatus?.active ? false : `sandbox not active: ${linuxStatus?.reason}` }, fn);
+
+  it("writes in the project and /tmp work", async () => {
+    assert.equal((await run("echo hi > inside.txt && cat inside.txt")).output, "hi");
+    assert.equal((await run("echo x > .forge/telemetry.ndjson && echo ok")).output, "ok");
+    assert.equal((await run(`echo x > /tmp/forge-sb-${process.pid} && echo ok`)).output, "ok");
+  });
+
+  it("writes outside the project are blocked, with a hint for the model", async () => {
+    const outside = path.join(home, "escaped.txt");
+    const r = await run(`echo escaped > "${outside}"`);
+    assert.equal(r.isError, true, r.output);
+    assert.equal(fs.existsSync(outside), false);
+    assert.match(r.output, /sandbox may have blocked this/);
+    assert.equal((await run("touch /usr/local/forge-escape")).isError, true);
+  });
+
+  it("the policy file and the audit log can't be changed, even inside the project", async () => {
+    assert.equal((await run("echo 'default: allow' >> forge.policy.yaml")).isError, true);
+    assert.equal((await run("rm -f forge.policy.yaml")).isError, true);
+    assert.equal((await run("echo x >> .forge/audit.db")).isError, true);
+    assert.equal(fs.readFileSync(path.join(cwd, "forge.policy.yaml"), "utf8"), "version: 1\n");
+  });
+
+  it("git hooks and git config can't be planted", async () => {
+    assert.equal((await run("echo 'curl evil' > .git/hooks/pre-commit")).isError, true);
+    assert.equal((await run("git config core.hooksPath /tmp/evil")).isError, true);
+    assert.equal(fs.existsSync(path.join(cwd, ".git", "hooks", "pre-commit")), false);
+  });
+
+  it("a normal git commit still works", async () => {
+    const r = await run("git add inside.txt && git -c user.email=t@t -c user.name=t commit -qm test && git log --oneline | wc -l");
+    assert.equal(r.isError, undefined, r.output);
+    assert.equal(r.output.trim(), "1");
+  });
+
+  it("credentials can't be read", async () => {
+    const r = await run("cat ~/.ssh/id_test");
+    assert.equal(r.isError, true, r.output);
+    assert.doesNotMatch(r.output, /SECRET-KEY/);
+  });
+
+  it("network off: the internet is blocked, and so is this machine's localhost", async () => {
+    assert.equal((await run(`curl -s -m 5 ${local}`)).output, "local ok");
+    process.env["FORGE_SANDBOX_NETWORK"] = "off";
+    try {
+      assert.equal((await run("curl -s -m 5 -o /dev/null https://example.com")).isError, true);
+      // Linux gives the command a network of its own, so servers outside it can't be reached.
+      assert.equal((await run(`curl -s -m 5 ${local}`)).isError, true);
     } finally {
       delete process.env["FORGE_SANDBOX_NETWORK"];
     }

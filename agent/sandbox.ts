@@ -55,6 +55,9 @@ export function sandboxStatus(env: Record<string, string | undefined> = process.
     const reason = platform === "linux" ? "bubblewrap isn't installed (apt install bubblewrap, or dnf install bubblewrap)" : `no sandbox support on ${platform}`;
     return { mode, active: false, kind: null, network: true, reason };
   }
+  // bwrap can be installed and still unable to start a sandbox (user namespaces turned off, as in some containers).
+  const broken = kind === "bubblewrap" && platform === process.platform ? bwrapProblem() : null;
+  if (broken) return { mode, active: false, kind: null, network: true, reason: `bubblewrap is installed but can't start a sandbox here: ${broken}` };
   return { mode, active: true, kind, network: settings.network };
 }
 
@@ -140,6 +143,7 @@ function bubblewrap(file: string, args: string[], project: string, network: bool
       "--ro-bind", "/", "/",
       "--dev", "/dev",
       "--proc", "/proc",
+      "--unshare-pid",
       "--bind", "/tmp", "/tmp",
       "--bind", project, project,
       // Read-only again inside the writable project (only possible for paths that exist).
@@ -167,6 +171,22 @@ function exists(p: string): boolean {
   } catch {
     return false;
   }
+}
+
+let bwrapChecked: { problem: string | null } | undefined;
+
+/** Try bubblewrap once, the way commands will use it. Null when it works, else why not. */
+function bwrapProblem(): string | null {
+  if (!bwrapChecked) {
+    try {
+      execFileSync("bwrap", ["--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--unshare-pid", "--die-with-parent", "--", "/bin/true"], { stdio: ["ignore", "ignore", "pipe"], timeout: 5_000 });
+      bwrapChecked = { problem: null };
+    } catch (err) {
+      const stderr = String((err as { stderr?: Buffer }).stderr ?? "").trim().split("\n")[0];
+      bwrapChecked = { problem: stderr || (err as Error).message };
+    }
+  }
+  return bwrapChecked.problem;
 }
 
 function onPath(command: string): boolean {
