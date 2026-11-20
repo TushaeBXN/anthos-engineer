@@ -869,6 +869,13 @@ To update to the newest release:
 npm install -g forge-anthos-intelligence@latest
 ```
 
+| Version | Date | What's new |
+|---|---|---|
+| [0.2.0](https://github.com/TushaeBXN/anthos-engineer/releases/tag/v0.2.0) | 2026-11-20 | [`forge doctor`](#checking-your-setup): checks the setup and says how to fix each problem |
+| [0.1.0](https://github.com/TushaeBXN/anthos-engineer/releases/tag/v0.1.0) | 2026-11-19 | First release: the agent loop and policy, 13 providers, MCP, sub-agents, streaming, compaction, repo map, project index, gRPC, VS Code |
+
+The VS Code extension is versioned on its own and is still 0.1.0; every release has it attached, so the [latest release](https://github.com/TushaeBXN/anthos-engineer/releases/latest) always has a copy.
+
 Forge stays at 0.x while some integrations (Xcode, VS Code, providers other than Ollama) haven't been run for real. See [What has been tested](#what-has-been-tested-and-how).
 
 ### Publishing a new version
@@ -880,6 +887,8 @@ For maintainers. Publishing to npm needs two-factor authentication on the npm ac
    ```bash
    git pull && npm install
    ```
+
+   Before publishing, `npm pack --dry-run` lists exactly which files will go into the package.
 
 2. **Set the new version** and push it:
 
@@ -894,13 +903,26 @@ For maintainers. Publishing to npm needs two-factor authentication on the npm ac
    npm publish
    ```
 
-4. **Create the GitHub release** with notes on what changed. If the VS Code extension changed, build it with `cd vscode-extension && npx @vscode/vsce package` and attach the `.vsix`:
+   npm may say "Your package is being processed and may take a few minutes to become available." That's normal: 0.2.0 took about 40 seconds to appear.
+
+4. **Create the GitHub release** with notes on what changed. Tag the version commit first and push the tag; `gh release create --target <commit>` refuses a bare commit ID. Attach the VS Code extension every time, so the latest release always has it. If the extension changed, build a new one with `cd vscode-extension && npx @vscode/vsce package`; if not, download the current one from the previous release:
 
    ```bash
-   gh release create v0.2.0 --title "Forge v0.2.0" --notes-file notes.md
+   git tag v0.2.0 && git push origin v0.2.0
+   gh release download v0.1.0 -p "forge-vscode-*.vsix"
+   gh release create v0.2.0 --verify-tag --title "Forge v0.2.0" --notes-file notes.md forge-vscode-0.1.0.vsix
    ```
 
-5. **Check it:** `npm view forge-anthos-intelligence version` should show the new version within a few minutes.
+5. **Check it.** npm keeps a local copy of package information, so ask the registry directly:
+
+   ```bash
+   npm view forge-anthos-intelligence version --prefer-online
+   npm install -g forge-anthos-intelligence@latest --prefer-online && forge doctor
+   ```
+
+   Without `--prefer-online`, npm may still say the new version doesn't exist (`ETARGET`) for a while after it's published.
+
+6. **Add a row** to the version table above.
 
 npm never lets a version number be used twice, even after it's been removed. 1.0.0 was published by mistake and removed, so the 1.0 release will need another number, such as 1.0.1.
 
