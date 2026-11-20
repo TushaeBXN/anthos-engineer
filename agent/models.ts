@@ -72,7 +72,7 @@ const MODELS: Record<string, { contextWindow: number; price?: { input: number; o
 
 // ── Config file (~/.forgerc) ──────────────────────────────────────────────────
 
-interface ForgeRc {
+export interface ForgeRc {
   provider?: string;
   model?: string;
   baseUrl?: string;
@@ -180,9 +180,13 @@ export function repoMapBudget(env: Record<string, string | undefined> = process.
 // ── Resolve ───────────────────────────────────────────────────────────────────
 
 /** Work out which model to use, and what is known about it, from the environment. */
-export function resolveModel(env: Record<string, string | undefined> = process.env): ModelInfo {
-  const rc = readRc();
-  const provider = (env["FORGE_PROVIDER"] ?? rc.provider ?? "anthropic").toLowerCase();
+export function resolveModel(env: Record<string, string | undefined> = process.env, saved: ForgeRc = readRc()): ModelInfo {
+  const provider = (env["FORGE_PROVIDER"] ?? saved.provider ?? "anthropic").toLowerCase();
+  // ~/.forgerc's model, address, context and prices belong to its provider. When FORGE_PROVIDER
+  // picks another one, they don't apply: asking Anthropic for an Ollama model only fails.
+  const rc: ForgeRc = !saved.provider || saved.provider.toLowerCase() === provider
+    ? saved
+    : { ...saved, model: undefined, baseUrl: undefined, context: undefined, priceInput: undefined, priceOutput: undefined };
   const known = PROVIDERS[provider];
   const model = env["FORGE_MODEL"] ?? rc.model ?? known?.defaultModel;
   if (!model) throw new Error(`Choose a model for "${provider}": forge config set model <name>  (or set FORGE_MODEL).`);

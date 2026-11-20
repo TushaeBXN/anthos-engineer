@@ -250,7 +250,7 @@ forge config get
 
 | Variable | Effect |
 |---|---|
-| `FORGE_PROVIDER` | Provider name — run `forge providers` for the list |
+| `FORGE_PROVIDER` | Provider name — run `forge providers` for the list. If it differs from the provider in `~/.forgerc`, that file's model, address, context and prices are ignored and the provider's default model is used |
 | `FORGE_MODEL` | Model name |
 | `FORGE_BASE_URL` | Base URL for OpenAI-compatible servers |
 | `FORGE_API_KEY` | Key for an OpenAI-compatible server Forge doesn't list |
@@ -1030,7 +1030,7 @@ npm install -g forge-anthos-intelligence@latest
 
 | Version | Date | What's new |
 |---|---|---|
-| [0.4.3](https://github.com/TushaeBXN/anthos-engineer/releases/tag/v0.4.3) | 2026-11-20 | `forge --version`; misspelled options are errors instead of requests; the sandbox hint names the protected files |
+| [0.4.3](https://github.com/TushaeBXN/anthos-engineer/releases/tag/v0.4.3) | 2026-11-20 | `forge --version`; misspelled options are errors instead of requests; `FORGE_PROVIDER` no longer keeps another provider's saved model; the sandbox hint names the protected files |
 | [0.4.2](https://github.com/TushaeBXN/anthos-engineer/releases/tag/v0.4.2) | 2026-11-20 | Sandbox fixes: commands can no longer swap `.git` for another, or create a policy file or repo where there was none |
 | [0.4.1](https://github.com/TushaeBXN/anthos-engineer/releases/tag/v0.4.1) | 2026-11-20 | The Linux sandbox, tested for real on Ubuntu; Forge checks that bubblewrap can start before using it |
 | [0.4.0](https://github.com/TushaeBXN/anthos-engineer/releases/tag/v0.4.0) | 2026-11-20 | [Sandbox](#sandbox): commands run in macOS Seatbelt or Linux bubblewrap and can write only inside the project |
@@ -1038,7 +1038,9 @@ npm install -g forge-anthos-intelligence@latest
 | [0.2.0](https://github.com/TushaeBXN/anthos-engineer/releases/tag/v0.2.0) | 2026-11-20 | [`forge doctor`](#checking-your-setup): checks the setup and says how to fix each problem |
 | [0.1.0](https://github.com/TushaeBXN/anthos-engineer/releases/tag/v0.1.0) | 2026-11-19 | First release: the agent loop and policy, 13 providers, MCP, sub-agents, streaming, compaction, repo map, project index, gRPC, VS Code |
 
-**Updating from 0.4.2:** an option Forge doesn't know, such as `forge --verison`, now stops with an error. Before, it was sent to the model as a request.
+**Updating from 0.4.2:**
+- An option Forge doesn't know, such as `forge --verison`, now stops with an error. Before, it was sent to the model as a request.
+- `FORGE_PROVIDER=anthropic forge` with Ollama saved in `~/.forgerc` now uses Claude's default model. Before, it asked Anthropic for your Ollama model and failed with "not found". Set `FORGE_MODEL` to choose another.
 
 The v0.4.0 tag points at `099be44`, one commit before a fix to a test file; the published code is the same.
 
