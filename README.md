@@ -859,6 +859,16 @@ For maintainers. Publishing to npm needs two-factor authentication on the npm ac
 
 npm never lets a version number be used twice, even after it's been removed. 1.0.0 was published by mistake and removed, so the 1.0 release will need another number, such as 1.0.1.
 
+**Old or unwanted versions.** npm keeps every published version in the package's list. Mark one you don't want used as deprecated instead of removing it: it stays listed, but anyone who installs it sees a warning. That's what was done to `0.0.0-stage`, an empty placeholder made while setting up the package:
+
+```bash
+npm deprecate forge-anthos-intelligence@0.0.0-stage "Placeholder version, not a real release. Install forge-anthos-intelligence@latest instead."
+```
+
+`npm view forge-anthos-intelligence@0.0.0-stage deprecated` prints the warning if it worked.
+
+**If npm says 404 or 401.** For an account change such as `npm publish` or `npm deprecate`, a `404 Not Found` usually means you're signed out, not that the package is missing; npm sign-ins expire. Check with `npm whoami`, and if it fails, run `npm login`. Press Enter when it asks, so it opens the browser, and approve there: signing in on the npm website alone doesn't sign in the command.
+
 ---
 
 ## License
