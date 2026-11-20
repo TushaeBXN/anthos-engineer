@@ -319,7 +319,7 @@ Forge is one loop:
 2. If the model asks for a tool, check it against your policy, run it, send the result back.
 3. Repeat until the model answers without asking for a tool.
 
-**Parallel tool calls** — when the model asks for multiple tools at once, reads run in parallel; writes serialize to prevent conflicts.
+**Parallel tool calls** — when the model asks for several tools at once, they run in the order it gave. Reads, searches, web requests and sub-agents next to each other run together; an edit or a command waits for the calls before it and runs alone, so "edit, then run the tests" tests the edited file.
 
 **File undo** — every write and edit is snapshotted before it happens. Use `/undo` to restore, `/history` to see what's changed.
 
@@ -370,7 +370,7 @@ Forge is one loop:
 - When a tool is blocked, a small local model may answer from memory as if it had run. Forge still prints the `⎿ … not allowed` line and logs the block, so what actually happened is always visible
 - Two `general` sub-agents running in parallel can edit the same file; use parallel tasks for separate files or read-only work
 - The 32k context wrapper (`num_ctx` Modelfile) is a manual step. Forge reads the window from Ollama once it's set, but doesn't create the Modelfile for you
-- Not yet run for real: Xcode, the VS Code extension, and a conversation on any provider other than Ollama (Anthropic included). Each is covered by tests against stand-ins; see [What has been tested](#what-has-been-tested-and-how)
+- Not yet run for real: Xcode, the VS Code extension, and a conversation on any provider other than Ollama and Anthropic. Each is covered by tests against stand-ins; see [What has been tested](#what-has-been-tested-and-how)
 - The [sandbox](#sandbox) covers commands (`bash`, `verify`), not MCP servers, and limits where a command can write, not what it writes: a command can still change files in the project that run later, such as a test script or a Makefile
 - On Linux the sandbox needs bubblewrap, and it's tested on GitHub's Ubuntu machines rather than a desktop Linux; on Windows there's no sandbox
 
@@ -439,10 +439,10 @@ A dash means I haven't confirmed it either way. Claude Code and OpenClaude are f
 | Project index | Yes — imports of every kind, methods, constructors, interfaces, name clashes | Yes — indexed Forge itself: 30 methods, 236 call links, none pointing at nothing |
 | Sub-agents | Yes, including two in parallel | Yes — `explore` found the right file and line |
 | gRPC server | Yes, over a real connection | Yes — `forge serve` + the example client |
-| 13 providers | Key handling and addresses | Each hosted address answered; **no real conversation yet** (needs each provider's key) |
+| 13 providers | Key handling and addresses | Ollama and **Anthropic** (`claude-opus-5-5`): a real session read a file, found two bugs, edited the file and ran the tests after approval, for 5k tokens and $0.04. It found two bugs in Forge, both fixed in 0.4.3: `FORGE_PROVIDER` kept the saved Ollama model, and a command sent with an edit ran before it. The other hosted addresses answered; **no real conversation on them yet** (needs each provider's key) |
 | VS Code extension | Yes, against a stand-in VS Code API; packages with `vsce` | **Not yet run in VS Code** |
 | Context compaction | Yes — trigger, carry-over, both providers' summary requests, fallback | Yes on `forge-deepseek`: compacted once mid-task (7.8k → 1.7k) and still answered correctly |
-| Streaming | Yes — local servers speaking the OpenAI and Anthropic stream formats | Yes on `forge-deepseek`: a reply arrived in 77 pieces over 6 s, and a turn with a tool call streamed too. **Anthropic not yet run live** (no key here) |
+| Streaming | Yes — local servers speaking the OpenAI and Anthropic stream formats | Yes on `forge-deepseek`: a reply arrived in 77 pieces over 6 s, and a turn with a tool call streamed too. On Anthropic, the session above ran over the streaming API, tool calls included |
 | Xcode (through MCP) | Yes, against a server that replies the way Xcode's bridge does | **Not yet run with real Xcode** |
 | MCP | Yes, against a real MCP server (`tests/fixtures/mcp-server.ts`) | Yes — `forge-deepseek` used a server's tool; a tool with no rule was refused |
 | `forge doctor` | Yes, against a fake model server | Yes — on this Ollama setup, and on broken ones: invalid config, missing model, stopped server, missing key, and a fake key the real Anthropic API rejected |
@@ -1030,7 +1030,7 @@ npm install -g forge-anthos-intelligence@latest
 
 | Version | Date | What's new |
 |---|---|---|
-| [0.4.3](https://github.com/TushaeBXN/anthos-engineer/releases/tag/v0.4.3) | 2026-11-20 | `forge --version`; misspelled options are errors instead of requests; `FORGE_PROVIDER` no longer keeps another provider's saved model; the sandbox hint names the protected files |
+| [0.4.3](https://github.com/TushaeBXN/anthos-engineer/releases/tag/v0.4.3) | 2026-11-20 | `forge --version`; misspelled options are errors instead of requests; `FORGE_PROVIDER` no longer keeps another provider's saved model; tool calls run in the model's order; first real session on Claude |
 | [0.4.2](https://github.com/TushaeBXN/anthos-engineer/releases/tag/v0.4.2) | 2026-11-20 | Sandbox fixes: commands can no longer swap `.git` for another, or create a policy file or repo where there was none |
 | [0.4.1](https://github.com/TushaeBXN/anthos-engineer/releases/tag/v0.4.1) | 2026-11-20 | The Linux sandbox, tested for real on Ubuntu; Forge checks that bubblewrap can start before using it |
 | [0.4.0](https://github.com/TushaeBXN/anthos-engineer/releases/tag/v0.4.0) | 2026-11-20 | [Sandbox](#sandbox): commands run in macOS Seatbelt or Linux bubblewrap and can write only inside the project |
@@ -1041,6 +1041,7 @@ npm install -g forge-anthos-intelligence@latest
 **Updating from 0.4.2:**
 - An option Forge doesn't know, such as `forge --verison`, now stops with an error. Before, it was sent to the model as a request.
 - `FORGE_PROVIDER=anthropic forge` with Ollama saved in `~/.forgerc` now uses Claude's default model. Before, it asked Anthropic for your Ollama model and failed with "not found". Set `FORGE_MODEL` to choose another.
+- When the model asks for an edit and a command in one reply, the command now runs after the edit. Before, commands ran first, so tests could run against the old file.
 
 The v0.4.0 tag points at `099be44`, one commit before a fix to a test file; the published code is the same.
 
@@ -1059,7 +1060,7 @@ The v0.4.0 tag points at `099be44`, one commit before a fix to a test file; the 
 
 The VS Code extension is versioned on its own and is still 0.1.0; every release has it attached, so the [latest release](https://github.com/TushaeBXN/anthos-engineer/releases/latest) always has a copy.
 
-Forge stays at 0.x while some integrations (Xcode, VS Code, providers other than Ollama) haven't been run for real. See [What has been tested](#what-has-been-tested-and-how).
+Forge stays at 0.x while some integrations (Xcode, VS Code, providers other than Ollama and Anthropic) haven't been run for real. See [What has been tested](#what-has-been-tested-and-how).
 
 ### Publishing a new version
 

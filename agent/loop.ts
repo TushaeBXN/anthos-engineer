@@ -131,7 +131,7 @@ export async function runTurn(message: string, agent: Agent): Promise<string> {
     }
 
     // Every tool call gets an answer, or the next request is invalid.
-    // Reads and shell calls run in parallel; writes serialize to avoid conflicts.
+    // Calls run in the model's order; only neighbouring reads run together (runToolsParallel).
     if (reply.stopped === "cut_off") {
       input = reply.toolCalls.map((call) =>
         failed(call, "Not run: your reply was cut off at the output limit. Use smaller steps, and edit instead of rewriting whole files."),
@@ -165,28 +165,37 @@ export async function compact(agent: Agent, pending: string | ToolResult[] | und
 }
 
 /**
- * Run tool calls with smart parallelism: reads and shell calls run concurrently;
- * writes serialize so two agents don't clobber the same file.
+ * Run tool calls in the order the model gave them. Calls that only look (reads, searches,
+ * web requests, read-only MCP tools, sub-agents) run together with their neighbours; anything
+ * that can change the project (writes, shell commands, other MCP tools) waits for the calls
+ * before it and runs alone, so "edit, then run the tests" tests the edited file.
  */
 async function runToolsParallel(calls: ToolCall[], agent: Agent): Promise<ToolResult[]> {
-  if (calls.length === 1) return [await runTool(calls[0]!, agent)];
-
-  // Split into waves: reads/shell first (parallel), then writes (sequential).
-  const reads: { idx: number; call: ToolCall }[] = [];
-  const writes: { idx: number; call: ToolCall }[] = [];
-  for (let i = 0; i < calls.length; i++) {
-    const call = calls[i]!;
-    const tool = agent.tools.find((t) => t.name === call.name);
-    const access = tool ? tool.access(call.input) : { kind: "none" as const };
-    // MCP tools can do anything; only those the server marks read-only run in parallel.
-    if (access.kind === "write" || (access.kind === "mcp" && !access.readOnly)) writes.push({ idx: i, call });
-    else reads.push({ idx: i, call });
-  }
-
   const results: ToolResult[] = new Array(calls.length);
-  await Promise.all(reads.map(async ({ idx, call }) => { results[idx] = await runTool(call, agent); }));
-  for (const { idx, call } of writes) results[idx] = await runTool(call, agent);
+  let batch: number[] = [];
+  const flush = async () => {
+    await Promise.all(batch.map(async (idx) => { results[idx] = await runTool(calls[idx]!, agent); }));
+    batch = [];
+  };
+  for (let i = 0; i < calls.length; i++) {
+    if (changesThings(calls[i]!, agent)) {
+      await flush();
+      results[i] = await runTool(calls[i]!, agent);
+    } else {
+      batch.push(i);
+    }
+  }
+  await flush();
   return results;
+}
+
+/** True for a call that can change files or run code: it must not overlap with other calls. */
+function changesThings(call: ToolCall, agent: Agent): boolean {
+  const tool = agent.tools.find((t) => t.name === call.name);
+  if (!tool) return false;
+  let access;
+  try { access = tool.access(call.input); } catch { return true; }
+  return access.kind === "write" || access.kind === "shell" || (access.kind === "mcp" && !access.readOnly);
 }
 
 /** Check one tool call against the policy, run it if allowed, and report what happened. */

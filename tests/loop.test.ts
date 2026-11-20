@@ -267,3 +267,29 @@ describe("runTurn", () => {
     assert.match(output, /output cut/);
   });
 });
+
+describe("tool call order", () => {
+  test("a read and a command after an edit in the same reply see the edited file", async () => {
+    const policy: ForgePolicy = {
+      ...POLICY,
+      rules: [...POLICY.rules, { id: "allow-cat", resource: "shell", operation: "cat", target: "*", effect: "allow" }],
+    };
+    const { session, received } = script([
+      wants(
+        call("w", "write", { path: "src/a.txt", content: "new" }),
+        call("r", "read", { path: "src/a.txt" }),
+        call("b", "bash", { command: "cat src/a.txt" }),
+      ),
+      says("done"),
+    ]);
+    const a = agent(session, { policy });
+    fs.mkdirSync(path.join(a.cwd, "src"));
+    fs.writeFileSync(path.join(a.cwd, "src/a.txt"), "old");
+    await runTurn("edit then check", a);
+    const results = received[1] as ToolResult[];
+    assert.deepEqual(results.map((r) => r.id), ["w", "r", "b"]);
+    assert.match(results[1]!.output, /new/);
+    assert.match(results[2]!.output, /new/);
+    assert.doesNotMatch(results[2]!.output, /old/);
+  });
+});
