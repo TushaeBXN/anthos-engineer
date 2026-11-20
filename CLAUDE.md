@@ -73,7 +73,7 @@ Requires Node.js 22+. Choose a model once with `npx tsx cli/index.ts config set 
 | `cli/index.ts` | The forge command: chat, one-shot, config, providers, doctor, serve |
 | `cli/commands.ts` | Slash commands |
 | `grpc/*` | `forge.proto`, the gRPC server, an example client |
-| `vscode-extension/*` | VS Code extension (plain JS, no build step) |
+| `vscode-extension/*` | VS Code extension (plain JS, no build step); `tests/vscode-real/run.mjs` runs it in real VS Code |
 
 ## Build and test
 

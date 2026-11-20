@@ -1,5 +1,6 @@
 // Forge in VS Code. Forge runs in the terminal panel exactly as it does in a shell,
-// so approvals, the policy check and the status line all work unchanged.
+// so approvals, the policy check and the status line all work unchanged. The terminal
+// runs only Forge: when Forge quits, the terminal ends, so text never reaches a shell.
 const vscode = require("vscode");
 const { lineRange, selectionMessage, fileMessage } = require("./messages");
 
@@ -32,10 +33,21 @@ function forgeTerminal() {
     return { terminal: open, fresh: false };
   }
   const folder = vscode.workspace.workspaceFolders?.[0];
-  const terminal = vscode.window.createTerminal({ name: NAME, cwd: folder?.uri.fsPath });
-  terminal.sendText(vscode.workspace.getConfiguration("forge").get("command", "forge"));
+  const command = vscode.workspace.getConfiguration("forge").get("command", "forge");
+  const terminal = vscode.window.createTerminal({ name: NAME, cwd: folder?.uri.fsPath, ...runOnly(command) });
   terminal.show();
   return { terminal, fresh: true };
+}
+
+/**
+ * The terminal runs Forge itself, not a shell that starts it, so when Forge quits the terminal
+ * ends too. Otherwise the next question would be typed into the shell left behind and run as
+ * a command, outside Forge's policy and sandbox. The login shell is used only to find the
+ * command on your PATH (nvm, Homebrew).
+ */
+function runOnly(command) {
+  if (process.platform === "win32") return { shellPath: process.env.ComSpec || "cmd.exe", shellArgs: ["/d", "/c", command] };
+  return { shellPath: process.env.SHELL || "/bin/sh", shellArgs: ["-l", "-i", "-c", command] };
 }
 
 async function send(text) {

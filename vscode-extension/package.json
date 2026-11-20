@@ -2,7 +2,7 @@
   "name": "forge-vscode",
   "displayName": "Forge by Anthos Intelligence",
   "description": "Run the Forge coding agent in VS Code: open it in the terminal panel and point it at the code you're looking at.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "anthos-intelligence",
   "license": "MIT",
   "repository": {

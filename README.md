@@ -370,7 +370,7 @@ Forge is one loop:
 - When a tool is blocked, a small local model may answer from memory as if it had run. Forge still prints the `⎿ … not allowed` line and logs the block, so what actually happened is always visible
 - Two `general` sub-agents running in parallel can edit the same file; use parallel tasks for separate files or read-only work
 - The 32k context wrapper (`num_ctx` Modelfile) is a manual step. Forge reads the window from Ollama once it's set, but doesn't create the Modelfile for you
-- Not yet run for real: Xcode, the VS Code extension, and a conversation on any provider other than Ollama and Anthropic. Each is covered by tests against stand-ins; see [What has been tested](#what-has-been-tested-and-how)
+- Not yet run for real: Xcode, the VS Code extension's question box (the rest has run in VS Code), and a conversation on any provider other than Ollama and Anthropic. Each is covered by tests against stand-ins; see [What has been tested](#what-has-been-tested-and-how)
 - The [sandbox](#sandbox) covers commands (`bash`, `verify`), not MCP servers, and limits where a command can write, not what it writes: a command can still change files in the project that run later, such as a test script or a Makefile
 - On Linux the sandbox needs bubblewrap, and it's tested on GitHub's Ubuntu machines rather than a desktop Linux; on Windows there's no sandbox
 
@@ -427,7 +427,7 @@ A dash means I haven't confirmed it either way. Claude Code and OpenClaude are f
 | Built-in tools | Files, search, shell, web, verify, sub-agents, memory | More, including notebook editing |
 | Community | New, one maintainer | 194,760 stars and 107,190 forks; releases every few days until v0.1.13 (2026-11-09), no commits since 2026-11-10 |
 
-**In short:** claw-code reaches further: more tools, Windows, and far more people using it, so more of it has been tried in practice. Forge goes further on control: per-rule permissions, a record of every decision, and a sandbox that also works on a Mac and protects its own rules. Forge has now run real sessions on Ollama and Claude; VS Code, Xcode and a session with a model on Linux still haven't been run for real; see the next table.
+**In short:** claw-code reaches further: more tools, Windows, and far more people using it, so more of it has been tried in practice. Forge goes further on control: per-rule permissions, a record of every decision, and a sandbox that also works on a Mac and protects its own rules. Forge has now run real sessions on Ollama and Claude, and its VS Code extension has run in VS Code; Xcode and a session with a model on Linux still haven't been run for real; see the next table.
 
 ### What has been tested, and how
 
@@ -441,7 +441,7 @@ A dash means I haven't confirmed it either way. Claude Code and OpenClaude are f
 | Sub-agents | Yes, including two in parallel | Yes — `explore` found the right file and line |
 | gRPC server | Yes, over a real connection | Yes — `forge serve` + the example client |
 | 13 providers | Key handling and addresses | Ollama and **Anthropic** (`claude-opus-5-5`): a real session read a file, found two bugs, edited the file and ran the tests after approval, for 5k tokens and $0.04. It found two bugs in Forge, both fixed in 0.4.3: `FORGE_PROVIDER` kept the saved Ollama model, and a command sent with an edit ran before it. Installed fresh from npm, 0.4.3's `forge doctor` picks `claude-opus-5-5` with `FORGE_PROVIDER=anthropic` and keeps the saved Ollama model without it. The other hosted addresses answered; **no real conversation on them yet** (needs each provider's key) |
-| VS Code extension | Yes, against a stand-in VS Code API; packages with `vsce` | **Not yet run in VS Code** |
+| VS Code extension | Yes, against a stand-in VS Code API; packages with `vsce` | Yes, in VS Code 1.147 (`tests/vscode-real`): the extension activates, Start opens Forge in the project folder, Repo Map and Undo reach it, unsaved files are refused, and after Forge quits the next command starts a new Forge. That run found a bug, fixed in extension 0.1.1: once Forge quit, questions went to the shell left in the terminal and ran as commands. Also run by hand with real Forge: Start and `/undo` worked. **The question box (Ask About Selection or File) not yet confirmed by hand** |
 | Context compaction | Yes — trigger, carry-over, both providers' summary requests, fallback | Yes on `forge-deepseek`: compacted once mid-task (7.8k → 1.7k) and still answered correctly |
 | Streaming | Yes — local servers speaking the OpenAI and Anthropic stream formats | Yes on `forge-deepseek`: a reply arrived in 77 pieces over 6 s, and a turn with a tool call streamed too. On Anthropic, the session above ran over the streaming API, tool calls included |
 | Xcode (through MCP) | Yes, against a server that replies the way Xcode's bridge does | **Not yet run with real Xcode** |
@@ -635,13 +635,15 @@ On Windows and Linux, `Cmd+Alt+F` is `Ctrl+Alt+F`. Forge reads files from disk, 
 **Install:**
 
 1. Install the `forge` command: `npm install -g forge-anthos-intelligence`
-2. Download `forge-vscode-0.1.0.vsix` from the [latest release](https://github.com/TushaeBXN/anthos-engineer/releases/latest), then:
+2. Download the `forge-vscode-*.vsix` file from the [latest release](https://github.com/TushaeBXN/anthos-engineer/releases/latest), then install it, using the version you downloaded:
 
 ```bash
 code --install-extension forge-vscode-0.1.0.vsix
 ```
 
-To build the extension yourself instead: `cd vscode-extension && npx @vscode/vsce package`.
+To build the extension yourself instead: `cd vscode-extension && npx @vscode/vsce package`. `vsce` fails if the folder's path contains a space; copy the folder somewhere without one first.
+
+The Forge terminal runs only Forge. When Forge quits, the terminal ends with it, and the next command starts Forge again, so nothing you ask is ever typed into a plain shell. Extension 0.1.0 didn't do this; update to 0.1.1.
 
 If you'd rather not link the command, set **Forge: Command** in VS Code's settings to the full command, for example `npx tsx /path/to/anthos-engineer/cli/index.ts`.
 
@@ -976,7 +978,7 @@ model/                   # the project index behind forge init and find_dependen
 verify/chain.ts          # type check → tests → lint
 executor/git.ts          # guarded git helpers
 diff/semantic.ts         # semantic diff grouping
-tests/                   # 313 tests; fixtures/ holds small MCP servers used by them
+tests/                   # 319 tests; fixtures/ holds small MCP servers used by them
 ```
 
 ---
@@ -984,7 +986,7 @@ tests/                   # 313 tests; fixtures/ holds small MCP servers used by 
 ## Tests
 
 ```bash
-npm test               # 313 tests
+npm test               # 319 tests
 ```
 
 CI runs them on Linux (Ubuntu) on every push to `main`, with bubblewrap installed, so the Linux sandbox tests run for real there; on a Mac, the macOS ones run instead.
@@ -993,7 +995,7 @@ CI runs them on Linux (Ubuntu) on every push to `main`, with bubblewrap installe
 
 | Suite | Tests | Covers |
 |---|---|---|
-| `loop` | 18 | Tool calls and results, deny / ask / approve, unattended refusals, cut-off and empty replies, step and budget limits |
+| `loop` | 19 | Tool calls and results, deny / ask / approve, unattended refusals, cut-off and empty replies, step and budget limits, tool calls run in the model's order |
 | `check` | 19 | Path escapes, symlinks, chained commands, git rules, protected files |
 | `policy` | 13 | Rule matching, deny-by-default, approval rules |
 | `tools` | 20 | read, write, edit, glob, grep, bash, line counting |
@@ -1009,13 +1011,17 @@ CI runs them on Linux (Ubuntu) on every push to `main`, with bubblewrap installe
 | `telemetry` | 2 | The circuit breaker; refused calls don't trip it |
 | `sandbox` | 28 | Settings and fallbacks, the Linux command line, setting aside what a command created, the hint the model gets, and real escape attempts through the `bash` tool on macOS and on Linux: home folder, policy file, audit log, git hooks and config, swapping `.git`, creating a policy file or repo, `~/.ssh`, the internet. Each OS's set skips on the other |
 | `doctor` | 12 | Each setup check against a fake model server: missing model, unreachable server, rejected or missing key (never printed), small window, policy problems, broken `~/.forgerc` |
-| `vscode` | 8 | Message formatting, every command, unsaved files |
+| `vscode` | 9 | Message formatting, every command, unsaved files, a new Forge after the old one quits |
+| `models` | 4 | `~/.forgerc`'s model applies only to its own provider; `FORGE_PROVIDER` and `FORGE_MODEL` |
+| `cli` | 3 | `forge --version`, and unknown options refused |
 | `usage` | 14 | Model lookup, provider keys, status line, cost, budget |
 | `git-executor` | 19 | Branch names, protected branches, verification gate. Uses its own policy, not this repo's |
 | `diff` | 14 | Category grouping, blast radius |
 | `verify` | 5 | Stages, skip conditions |
 
 Tests never read your `~/.forgerc`, so they give the same result on any machine.
+
+**In real VS Code.** `node tests/vscode-real/run.mjs` opens VS Code with a throwaway profile and runs the extension there, against a stand-in Forge that records where it started and every line it receives: 16 checks, including that a question never reaches a shell after Forge quits. It isn't part of `npm test`, because it needs VS Code installed and opens a window for a few seconds. Run it when the extension changes.
 
 ---
 
@@ -1044,6 +1050,8 @@ npm install -g forge-anthos-intelligence@latest
 - `FORGE_PROVIDER=anthropic forge` with Ollama saved in `~/.forgerc` now uses Claude's default model. Before, it asked Anthropic for your Ollama model and failed with "not found". Set `FORGE_MODEL` to choose another.
 - When the model asks for an edit and a command in one reply, the command now runs after the edit. Before, commands ran first, so tests could run against the old file.
 
+**Not yet released** (on `main`): VS Code extension 0.1.1. In 0.1.0, once Forge quit inside its terminal, the next question was typed into the shell left behind and ran as a command, outside Forge's policy and sandbox. Now the terminal runs only Forge and ends when it does. Until the next release, build it yourself (see [VS Code](#vs-code)) or, after Forge quits, close its terminal before asking again.
+
 The v0.4.0 tag points at `099be44`, one commit before a fix to a test file; the published code is the same.
 
 **Updating from 0.4.1:** `git init` inside Forge is now blocked on Linux too (it already failed on macOS): the new repo is renamed to `.git.blocked-by-forge`. Run `git init` yourself. Anything else a command creates among Forge's and git's protected files is set aside the same way, and the model is told.
@@ -1059,9 +1067,9 @@ The v0.4.0 tag points at `099be44`, one commit before a fix to a test file; the 
 - `verify` is now checked as the commands it runs (`npx tsc`, `npm test`, `npx eslint`). If your policy has no rule for them, it asks before running; add shell rules for the ones you trust.
 - If your own policy uses `target: "**"` to mean the project, it also covers files outside it, such as `~/.ssh`. See [Rule order matters](#ready-made-policies).
 
-The VS Code extension is versioned on its own and is still 0.1.0; every release has it attached, so the [latest release](https://github.com/TushaeBXN/anthos-engineer/releases/latest) always has a copy.
+The VS Code extension is versioned on its own: 0.1.0 is attached to releases up to 0.4.3, and 0.1.1 is on `main`, to be attached from the next release. Every release has it attached, so the [latest release](https://github.com/TushaeBXN/anthos-engineer/releases/latest) always has a copy.
 
-Forge stays at 0.x while some integrations (Xcode, VS Code, providers other than Ollama and Anthropic) haven't been run for real. See [What has been tested](#what-has-been-tested-and-how).
+Forge stays at 0.x while some integrations (Xcode, providers other than Ollama and Anthropic) haven't been run for real. See [What has been tested](#what-has-been-tested-and-how).
 
 ### Publishing a new version
 

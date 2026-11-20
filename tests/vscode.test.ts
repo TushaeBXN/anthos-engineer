@@ -19,7 +19,7 @@ describe("vscode extension — messages", () => {
 });
 
 // A stand-in for the parts of the vscode API the extension uses.
-interface FakeTerminal { name: string; cwd?: string; exitStatus?: unknown; sent: string[]; sendText(t: string): void; show(): void }
+interface FakeTerminal { name: string; cwd?: string; shellPath?: string; shellArgs?: string[]; exitStatus?: unknown; sent: string[]; sendText(t: string): void; show(): void }
 const fake = {
   terminals: [] as FakeTerminal[],
   commands: new Map<string, (...args: unknown[]) => unknown>(),
@@ -32,7 +32,7 @@ const vscode = {
   window: {
     get terminals() { return fake.terminals; },
     get activeTextEditor() { return fake.editor; },
-    createTerminal(options: { name: string; cwd?: string }) {
+    createTerminal(options: { name: string; cwd?: string; shellPath?: string; shellArgs?: string[] }) {
       const t: FakeTerminal = { ...options, exitStatus: undefined, sent: [], sendText(x) { this.sent.push(x); }, show() {} };
       fake.terminals.push(t);
       return t;
@@ -88,14 +88,25 @@ describe("vscode extension — commands", () => {
     await fake.commands.get("forge.start")!();
     assert.equal(fake.terminals.length, 1);
     assert.equal(fake.terminals[0]!.cwd, "/proj");
-    assert.deepEqual(fake.terminals[0]!.sent, ["forge"]);
+    // The terminal runs Forge itself; nothing is typed into a shell.
+    assert.equal(fake.terminals[0]!.shellArgs!.at(-1), "forge");
+    assert.deepEqual(fake.terminals[0]!.sent, []);
+  });
+
+  test("after Forge quits, a question opens a new Forge terminal instead of going to the old one", async () => {
+    await fake.commands.get("forge.start")!();
+    fake.terminals[0]!.exitStatus = { code: 0 };
+    await fake.commands.get("forge.repomap")!();
+    assert.equal(fake.terminals.length, 2);
+    assert.deepEqual(fake.terminals[0]!.sent, []);
+    assert.deepEqual(fake.terminals[1]!.sent, ["/repomap"]);
   });
 
   test("Ask About Selection sends the file, lines and question to the open terminal", async () => {
     await fake.commands.get("forge.start")!();
     fake.editor = editor("src/loop.ts", [41, 59, 0]);
     await fake.commands.get("forge.askSelection")!();
-    assert.deepEqual(fake.terminals[0]!.sent, ["forge", "Look at src/loop.ts lines 42-59: what does this do?"]);
+    assert.deepEqual(fake.terminals[0]!.sent, ["Look at src/loop.ts lines 42-59: what does this do?"]);
   });
 
   test("an unsaved file is refused, since Forge reads from disk", async () => {
@@ -110,13 +121,13 @@ describe("vscode extension — commands", () => {
     fake.editor = editor("src/loop.ts", [0, 3, 2]);
     fake.answer = undefined;
     await fake.commands.get("forge.askFile")!();
-    assert.deepEqual(fake.terminals[0]!.sent, ["forge"]);
+    assert.deepEqual(fake.terminals[0]!.sent, []);
   });
 
   test("Repo Map and Undo send the slash commands", async () => {
     await fake.commands.get("forge.start")!();
     await fake.commands.get("forge.repomap")!();
     await fake.commands.get("forge.undo")!();
-    assert.deepEqual(fake.terminals[0]!.sent, ["forge", "/repomap", "/undo"]);
+    assert.deepEqual(fake.terminals[0]!.sent, ["/repomap", "/undo"]);
   });
 });
