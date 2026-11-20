@@ -405,6 +405,26 @@ Forge started as a one-shot planner and was rebuilt to work like Claude Code: a 
 
 A dash means I haven't confirmed it either way. Claude Code and OpenClaude are far larger projects; Forge's focus is the part they share least: an agent you can govern and audit, running on whatever model you choose.
 
+### Compared with claw-code
+
+[claw-code](https://github.com/ultraworkers/claw-code) is an open-source coding agent written in Rust, modeled on Claude Code. Forge's sandbox was built from the same idea, with its own code. This comparison is from claw-code's code and commits as of 2026-11-20 (release v0.1.13, 2026-11-09); I haven't run claw-code.
+
+| | Forge 0.4.0 | claw-code v0.1.13 |
+|---|---|---|
+| Permission levels | A rule for each resource, action and target (allow, ask or deny), plus three ready-made presets | Three fixed modes: read-only, workspace-write, danger-full-access |
+| Sandbox on macOS | Yes (Seatbelt) | No, Linux only |
+| Sandbox on Linux | bubblewrap: the system is read-only and only the project is writable. Not yet run on a real Linux machine | Linux namespaces (`unshare`). Its "workspace-only" mode is passed to the command as an environment variable rather than blocking writes; it also points `HOME` at a folder inside the project |
+| Policy file, audit log and git hooks protected from commands | Yes | No |
+| `~/.ssh`, `~/.aws`, `~/.gnupg` | Hidden from commands, and denied by every preset | Not blocked by the sandbox |
+| Record of every permission decision | Yes, a local audit log | None found |
+| Setup check | `forge doctor` | `doctor` |
+| Written in | TypeScript (Node.js) | Rust, one program to install |
+| Windows | Not supported by the sandbox; not tested | Supported |
+| Built-in tools | Files, search, shell, web, verify, sub-agents, memory | More, including notebook editing |
+| Community | New, one maintainer | 194,760 stars and 107,204 forks, frequent releases |
+
+**In short:** claw-code reaches further: more tools, Windows, and far more people using it, so more of it has been tried in practice. Forge goes further on control: per-rule permissions, a record of every decision, and a sandbox that also works on a Mac and protects its own rules. Some Forge features still haven't been run for real; see the next table.
+
 ### What has been tested, and how
 
 | Feature | Tests | Run for real |
