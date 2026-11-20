@@ -600,7 +600,7 @@ forge config set sandbox off            # turn it off
 forge config set sandboxNetwork off     # sandboxed commands can't reach the internet
 ```
 
-`forge doctor` shows whether it's on. When a command fails because of it, Forge tells the model so, and the model can ask you to run that command yourself. The hint says commands can write only in the project and temp folders, so when what was blocked is a protected file inside the project (`git init`, say), it doesn't yet name the real reason. `git push` over SSH needs your SSH key, which the sandbox hides, so push yourself or use HTTPS.
+`forge doctor` shows whether it's on. When a command fails because of it, Forge tells the model so, and the model can ask you to run that command yourself. When what was blocked is a protected file inside the project (`git init`, say), the hint names the protected files, so the model doesn't think the project itself is off limits. `git push` over SSH needs your SSH key, which the sandbox hides, so push yourself or use HTTPS.
 
 **What it covers, and what it doesn't.** It covers commands Forge runs. Forge's own `read`, `write` and `edit` tools run inside Forge and are covered by the policy instead. MCP servers are started by you, from your config, and aren't sandboxed. The sandbox limits *where* a command can write, not *what*: a command can still change a file in the project that runs later, such as a test script or a Makefile, which is one more reason to review the diff.
 
@@ -971,7 +971,7 @@ model/                   # the project index behind forge init and find_dependen
 verify/chain.ts          # type check → tests → lint
 executor/git.ts          # guarded git helpers
 diff/semantic.ts         # semantic diff grouping
-tests/                   # 309 tests; fixtures/ holds small MCP servers used by them
+tests/                   # 310 tests; fixtures/ holds small MCP servers used by them
 ```
 
 ---
@@ -979,7 +979,7 @@ tests/                   # 309 tests; fixtures/ holds small MCP servers used by 
 ## Tests
 
 ```bash
-npm test               # 309 tests
+npm test               # 310 tests
 ```
 
 CI runs them on Linux (Ubuntu) on every push to `main`, with bubblewrap installed, so the Linux sandbox tests run for real there; on a Mac, the macOS ones run instead.
@@ -1002,7 +1002,7 @@ CI runs them on Linux (Ubuntu) on every push to `main`, with bubblewrap installe
 | `extractor` | 4 | The project indexer: functions and methods, calls across files, constructors, interfaces, never library files |
 | `presets` | 76 | Every action in the table above, under each ready-made policy, loaded from YAML the way Forge loads it; `verify` goes through the policy; `forge doctor` finds no problems in any of them |
 | `telemetry` | 2 | The circuit breaker; refused calls don't trip it |
-| `sandbox` | 27 | Settings and fallbacks, the Linux command line, setting aside what a command created, and real escape attempts through the `bash` tool on macOS and on Linux: home folder, policy file, audit log, git hooks and config, swapping `.git`, creating a policy file or repo, `~/.ssh`, the internet. Each OS's set skips on the other |
+| `sandbox` | 28 | Settings and fallbacks, the Linux command line, setting aside what a command created, the hint the model gets, and real escape attempts through the `bash` tool on macOS and on Linux: home folder, policy file, audit log, git hooks and config, swapping `.git`, creating a policy file or repo, `~/.ssh`, the internet. Each OS's set skips on the other |
 | `doctor` | 12 | Each setup check against a fake model server: missing model, unreachable server, rejected or missing key (never printed), small window, policy problems, broken `~/.forgerc` |
 | `vscode` | 8 | Message formatting, every command, unsaved files |
 | `usage` | 14 | Model lookup, provider keys, status line, cost, budget |
