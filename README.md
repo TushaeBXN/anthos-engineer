@@ -1033,6 +1033,8 @@ npm install -g forge-anthos-intelligence@latest
 | [0.2.0](https://github.com/TushaeBXN/anthos-engineer/releases/tag/v0.2.0) | 2026-11-20 | [`forge doctor`](#checking-your-setup): checks the setup and says how to fix each problem |
 | [0.1.0](https://github.com/TushaeBXN/anthos-engineer/releases/tag/v0.1.0) | 2026-11-19 | First release: the agent loop and policy, 13 providers, MCP, sub-agents, streaming, compaction, repo map, project index, gRPC, VS Code |
 
+**Not yet released** (on `main`, in the next version): when the sandbox blocks a protected file inside the project, such as `git init` or a write to `forge.policy.yaml`, the hint to the model names the protected files instead of saying commands can write only in the project.
+
 The v0.4.0 tag points at `099be44`, one commit before a fix to a test file; the published code is the same.
 
 **Updating from 0.4.1:** `git init` inside Forge is now blocked on Linux too (it already failed on macOS): the new repo is renamed to `.git.blocked-by-forge`. Run `git init` yourself. Anything else a command creates among Forge's and git's protected files is set aside the same way, and the model is told.
