@@ -431,13 +431,16 @@ A dash means I haven't confirmed it either way. Claude Code and OpenClaude are f
 | Telling the model why something was blocked | The policy's reason, and a sandbox hint; on `main`, the hint names the protected files | Its permission checks give a reason, such as a path being outside the workspace |
 | Record of every permission decision | Yes, a local audit log | None found |
 | Several tool calls in one reply | In the model's order; reads next to each other run together. Before 0.4.3, commands ran before edits, found in the first Claude session | One at a time, in the model's order |
+| How a file is shown to the model | Numbered lines (`3→  text`). Before 0.4.4 the number was followed by two spaces, which a local model mistook for indentation | The file's text as it is, with its first line number given separately, so this confusion can't arise |
+| A local model's thinking | Kept out of the answer and the conversation, whether the server sends it separately or the model writes it into the reply ending with `</think>` (0.4.4) | Reasoning the server sends separately is kept, and sent back to DeepSeek models that require it; no handling of `</think>` written into the reply found |
+| Editor integration | VS Code extension: ask about a selection or file from the editor; run in VS Code 1.147, by hand and by 16 automated checks | None found; it runs in a terminal |
 | Setup check | `forge doctor` | `doctor` |
 | Written in | TypeScript (Node.js) | Rust, one program to install |
 | Windows | Not supported by the sandbox; not tested | Supported |
 | Built-in tools | Files, search, shell, web, verify, sub-agents, memory | More, including notebook editing |
-| Community | New, one maintainer | 194,760 stars and 107,190 forks; releases every few days until v0.1.13 (2026-11-09), no commits since 2026-11-10 |
+| Community | New, one maintainer | 194,756 stars and 107,185 forks; releases every few days until v0.1.13 (2026-11-09), no commits since 2026-11-10 |
 
-**In short:** claw-code reaches further: more tools, Windows, and far more people using it, so more of it has been tried in practice. Forge goes further on control: per-rule permissions, a record of every decision, and a sandbox that also works on a Mac and protects its own rules. Forge has now run real sessions on Ollama and Claude, and its VS Code extension has run in VS Code; Xcode and a session with a model on Linux still haven't been run for real; see the next table.
+**In short:** claw-code reaches further: more tools, Windows, and far more people using it, so more of it has been tried in practice. Forge goes further on control: per-rule permissions, a record of every decision, and a sandbox that also works on a Mac and protects its own rules. Forge has now run real sessions on Ollama and Claude, and its VS Code extension has run in VS Code; Xcode and a session with a model on Linux still haven't been run for real. Several of Forge's recent fixes (tool-call order, line numbers) were for things claw-code's simpler design never got wrong; see the next table.
 
 ### What has been tested, and how
 
