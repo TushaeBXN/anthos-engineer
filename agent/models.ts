@@ -103,6 +103,25 @@ export function writeRc(updates: Partial<ForgeRc>): void {
 
 export { RC_PATH };
 
+/**
+ * Why ~/.forgerc can't be used, or null when it's fine or doesn't exist.
+ * readRc() ignores a broken file so Forge still starts; `forge doctor` reports it.
+ */
+export function rcProblem(file: string = RC_PATH): string | null {
+  let text: string;
+  try {
+    text = fs.readFileSync(file, "utf8");
+  } catch (err) {
+    return (err as NodeJS.ErrnoException).code === "ENOENT" ? null : (err as Error).message;
+  }
+  try {
+    const parsed: unknown = JSON.parse(text);
+    return parsed !== null && typeof parsed === "object" && !Array.isArray(parsed) ? null : "it isn't a JSON object";
+  } catch (err) {
+    return `it isn't valid JSON (${(err as Error).message})`;
+  }
+}
+
 const detected = new Map<string, number>();
 
 /**

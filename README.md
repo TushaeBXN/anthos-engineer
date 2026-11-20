@@ -60,6 +60,8 @@ forge
 
 Any other provider works the same way: `forge providers` lists them all and the key each one needs.
 
+If something doesn't work, run `forge doctor`: it checks the setup and says how to fix each problem. See [Checking your setup](#checking-your-setup).
+
 ### From source
 
 To work on Forge itself, or to run the newest unreleased code:
@@ -136,6 +138,7 @@ Every `⎿` line is a tool call that passed the policy check. Lines starting wit
 | `forge init` | Build the [project index](#project-index) for `forge query` and `find_dependents` |
 | `forge query <name>` | Show what depends on a function or module |
 | `forge providers` | List providers and whether each key is set |
+| `forge doctor [--json]` | [Check the setup](#checking-your-setup) and say how to fix what's wrong |
 | `forge serve [--port N]` | Run Forge as a gRPC service for editors, UIs and scripts |
 
 ### Config commands
@@ -148,6 +151,44 @@ forge providers                           # every provider, and whether its key 
 ```
 
 Settings are saved to `~/.forgerc` and survive terminal restarts — no need to `export` env vars every time.
+
+### Checking your setup
+
+`forge doctor` checks everything Forge needs, in the folder you run it from, and says how to fix each problem:
+
+```
+$ forge doctor
+
+  ✓ Node.js         26.13.1
+  ✓ Config          /Users/you/.forgerc
+  ✓ Model           ollama / forge-deepseek (open weights, runs on this machine)
+  ✓ API key         none needed
+  ✓ Model server    http://localhost:11434/v1 answered and has forge-deepseek
+  ✓ Context window  32,768 tokens
+  ✓ Policy          18 rules, default deny
+  ✓ Project folder  /Users/you/my-project
+  ✓ Git             this folder is a git repository
+  ✓ Project index   built; find_dependents can answer
+  ✓ MCP             no servers configured
+  ! Engram memory   not running (optional: recall and remember won't work)
+                    → engram serve
+
+  Ready, with 1 warning.
+```
+
+| Check | Fails or warns when |
+|---|---|
+| Node.js | Older than 22 |
+| Config | `~/.forgerc` isn't valid JSON. Forge ignores a broken file and falls back to defaults, so this is the only place you'd find out |
+| Model, API key | No model chosen, or the provider's key isn't set. The key itself is never printed |
+| Model server | The server can't be reached, rejects the key, or doesn't have the model (with the `ollama pull` command to get it). This is one free request that lists or looks up models; it never runs the model |
+| Context window | Unknown (automatic compaction is then off) or under 16k tokens, which is too small for Forge's tools; for Ollama it says how to raise `num_ctx` |
+| Policy | No `forge.policy.yaml` (every action then needs your OK), a file that can't be read, or rules that can never match, such as a partial wildcard like `npm *` |
+| Project folder, Git, Project index | The folder isn't writable, isn't a git repository, or hasn't been indexed with `forge init` |
+| MCP | A server in `mcp.json` doesn't start. It starts each one to find out; `--no-mcp` skips this |
+| Engram memory | Not running. It's optional, so this is only a warning |
+
+✗ means Forge can't work until it's fixed, and the command then exits with code 1; ! is a warning. `forge doctor --json` gives the same checks as JSON, for scripts.
 
 ### Slash commands (inside a conversation)
 
@@ -290,6 +331,7 @@ Forge is one loop:
 - Proper agent loop — model → tools → model → repeat, not one-shot
 - Tool calling actually executes (reads files, writes, runs bash)
 - Policy check before every tool — allow / ask / deny
+- `forge doctor` — checks the setup (model server, key, context window, policy, MCP) and says how to fix each problem
 - Parallel reads, sequential writes
 - File undo (`/undo`) — every write snapshotted before it happens
 - Tool telemetry — logs every call to `.forge/telemetry.ndjson`; `/telemetry` shows session stats
@@ -346,6 +388,7 @@ Forge started as a one-shot planner and was rebuilt to work like Claude Code: a 
 | Automatic context compaction | Yes | — | Yes — mid-task, with Ollama's window detected |
 | MCP | Yes | Yes | Yes — every MCP tool call goes through the policy; a project's servers need your OK |
 | Xcode (Apple's MCP bridge) | Yes | — | Yes, not yet tried with real Xcode |
+| Setup check (`doctor`) | Yes | — | Yes — includes the policy file and MCP servers |
 | Sandbox | Yes | — | No (v2) |
 
 A dash means I haven't confirmed it either way. Claude Code and OpenClaude are far larger projects; Forge's focus is the part they share least: an agent you can govern and audit, running on whatever model you choose.
@@ -747,6 +790,7 @@ agent/
 ├── compaction.ts        # when and how to summarize the conversation
 ├── subagents.ts         # the task tool, agent types, .forge/agents loader
 ├── mcp.ts               # MCP servers: config, trust, connect, tools
+├── doctor.ts            # forge doctor: setup checks and how to fix each
 └── providers/
     ├── anthropic.ts     # Claude via Anthropic SDK
     └── openai.ts        # every OpenAI-compatible provider (OpenAI, Gemini, OpenRouter, Ollama, ...)
@@ -770,14 +814,14 @@ vscode-extension/       # VS Code: Forge in the terminal panel, ask about a sele
 grpc/                   # forge.proto, the gRPC server, and an example client
 
 cli/
-├── index.ts             # the forge command: chat, one-shot, config, providers, serve, init, query
+├── index.ts             # the forge command: chat, one-shot, config, providers, doctor, serve, init, query
 └── commands.ts          # 24 slash commands
 
 model/                   # the project index behind forge init and find_dependents (.forge/events.db)
 verify/chain.ts          # type check → tests → lint
 executor/git.ts          # guarded git helpers
 diff/semantic.ts         # semantic diff grouping
-tests/                   # 198 tests; fixtures/ holds small MCP servers used by them
+tests/                   # 210 tests; fixtures/ holds small MCP servers used by them
 ```
 
 ---
@@ -785,7 +829,7 @@ tests/                   # 198 tests; fixtures/ holds small MCP servers used by 
 ## Tests
 
 ```bash
-npm test               # 198 tests
+npm test               # 210 tests
 ```
 
 `npm audit` reports no known vulnerabilities in Forge's dependencies (as of 2026-11-18). This matters more than usual for an agent: the `glob` tool passes model-written patterns to `glob` and `minimatch`, so a denial-of-service bug in either could let text the model has read hang Forge.
@@ -804,6 +848,7 @@ npm test               # 198 tests
 | `grpc` | 5 | A full turn over a real connection, streamed text, approvals, token check |
 | `mcp` | 9 | A real MCP server: calls, errors, policy, project trust, a server that fails to start, replies like Xcode's bridge |
 | `extractor` | 4 | The project indexer: functions and methods, calls across files, constructors, interfaces, never library files |
+| `doctor` | 12 | Each setup check against a fake model server: missing model, unreachable server, rejected or missing key (never printed), small window, policy problems, broken `~/.forgerc` |
 | `vscode` | 8 | Message formatting, every command, unsaved files |
 | `usage` | 14 | Model lookup, provider keys, status line, cost, budget |
 | `git-executor` | 19 | Branch names, protected branches, verification gate |

@@ -7,6 +7,7 @@ npm install
 npx tsx cli/index.ts                 # start a conversation
 npx tsx cli/index.ts "<request>"     # do one thing and exit
 npx tsx cli/index.ts init            # index the repo for find_dependents
+npx tsx cli/index.ts doctor          # check the setup
 ```
 
 Requires Node.js 22+. Choose a model once with `npx tsx cli/index.ts config set provider <name>` and `config set model <name>` (saved to `~/.forgerc`); `forge providers` lists the options. Keys stay in environment variables, never in `~/.forgerc`.
@@ -46,6 +47,7 @@ Requires Node.js 22+. Choose a model once with `npx tsx cli/index.ts config set 
 | `agent/compaction.ts` | When and how to summarize the conversation to free context |
 | `agent/subagents.ts` | The `task` tool, agent types, `.forge/agents/` loader |
 | `agent/mcp.ts` | MCP servers: config, project trust, connect, wrap tools |
+| `agent/doctor.ts` | `forge doctor`: setup checks, each with a fix; writes nothing, never prints a key |
 | `agent/providers/anthropic.ts` | Anthropic SDK |
 | `agent/providers/openai.ts` | Every OpenAI-compatible provider (OpenAI, Gemini, OpenRouter, Groq, Ollama, …) |
 | `tools/files.ts` | read, write, edit |
@@ -63,7 +65,7 @@ Requires Node.js 22+. Choose a model once with `npx tsx cli/index.ts config set 
 | `executor/git.ts` | Guarded git helpers |
 | `diff/semantic.ts` | Group index changes by area (demo) |
 | `demo/*` | Web demo running the same loop in a sandbox |
-| `cli/index.ts` | The forge command: chat, one-shot, config, providers, serve |
+| `cli/index.ts` | The forge command: chat, one-shot, config, providers, doctor, serve |
 | `cli/commands.ts` | Slash commands |
 | `grpc/*` | `forge.proto`, the gRPC server, an example client |
 | `vscode-extension/*` | VS Code extension (plain JS, no build step) |

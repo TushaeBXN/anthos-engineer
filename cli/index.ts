@@ -4,6 +4,7 @@
  *
  *   forge                 Start a conversation
  *   forge "<request>"     Do one thing and exit
+ *   forge doctor          Check the setup
  *   forge init            Index the project, for find_dependents
  *   forge query <name>    Show what depends on a function or module
  */
@@ -18,6 +19,7 @@ import { runCommand, type CommandContext } from "./commands.js";
 const HELP = `
   forge                          Start a conversation
   forge "<request>"              Do one thing and exit
+  forge doctor [--json]          Check the setup and say how to fix what's wrong
   forge providers                List providers and the key each needs
   forge serve [--port N]         Run Forge as a gRPC service (grpc/forge.proto)
   forge init                     Index the project
@@ -159,6 +161,14 @@ function providers(): void {
 `);
 }
 
+/** forge doctor [--json] [--no-mcp]: check the setup. Exits 1 when something must be fixed. */
+async function doctor(args: string[]): Promise<void> {
+  const { runDoctor, formatChecks } = await import("../agent/doctor.js");
+  const checks = await runDoctor({ cwd: process.cwd(), mcp: !args.includes("--no-mcp") });
+  console.log(args.includes("--json") ? JSON.stringify(checks, null, 2) : formatChecks(checks));
+  if (checks.some((c) => c.state === "fail")) process.exitCode = 1;
+}
+
 async function query(name: string): Promise<void> {
   const { findDependents } = await import("../tools/project.js");
   const result = await findDependents.run({ name }, process.cwd());
@@ -173,6 +183,7 @@ async function main(): Promise<void> {
   if (command === "help" || command === "--help" || command === "-h") return console.log(HELP);
   if (command === "init") return init();
   if (command === "providers") return providers();
+  if (command === "doctor") return doctor(rest);
   if (command === "serve") return serve(rest);
   if (command === "config") {
     const [sub, key, ...vals] = rest;
