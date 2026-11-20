@@ -420,13 +420,14 @@ A dash means I haven't confirmed it either way. Claude Code and OpenClaude are f
 | `~/.ssh`, `~/.aws`, `~/.gnupg` | Hidden from commands, and denied by every preset | Not blocked by the sandbox |
 | Telling the model why something was blocked | The policy's reason, and a sandbox hint; on `main`, the hint names the protected files | Its permission checks give a reason, such as a path being outside the workspace |
 | Record of every permission decision | Yes, a local audit log | None found |
+| Several tool calls in one reply | In the model's order; reads next to each other run together. Before 0.4.3, commands ran before edits, found in the first Claude session | One at a time, in the model's order |
 | Setup check | `forge doctor` | `doctor` |
 | Written in | TypeScript (Node.js) | Rust, one program to install |
 | Windows | Not supported by the sandbox; not tested | Supported |
 | Built-in tools | Files, search, shell, web, verify, sub-agents, memory | More, including notebook editing |
-| Community | New, one maintainer | 194,760 stars and 107,203 forks; releases every few days until v0.1.13 (2026-11-09) |
+| Community | New, one maintainer | 194,760 stars and 107,190 forks; releases every few days until v0.1.13 (2026-11-09), no commits since 2026-11-10 |
 
-**In short:** claw-code reaches further: more tools, Windows, and far more people using it, so more of it has been tried in practice. Forge goes further on control: per-rule permissions, a record of every decision, and a sandbox that also works on a Mac and protects its own rules. Some Forge features still haven't been run for real, including a session with a model on Linux; see the next table.
+**In short:** claw-code reaches further: more tools, Windows, and far more people using it, so more of it has been tried in practice. Forge goes further on control: per-rule permissions, a record of every decision, and a sandbox that also works on a Mac and protects its own rules. Forge has now run real sessions on Ollama and Claude; VS Code, Xcode and a session with a model on Linux still haven't been run for real; see the next table.
 
 ### What has been tested, and how
 
