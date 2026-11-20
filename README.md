@@ -433,6 +433,7 @@ A dash means I haven't confirmed it either way. Claude Code and OpenClaude are f
 | Feature | Tests | Run for real |
 |---|---|---|
 | Agent loop, policy, audit, undo | Yes | Yes, on `forge-deepseek` |
+| `forge --version`, unknown options | Yes — the version matches `package.json`; a misspelled flag is an error, not a request | Yes — the built command printed `0.4.2` and refused `--bogus` (on `main`, not yet released) |
 | Web search and fetch | Yes, including a local server for redirects | Yes — live search, live fetch, and a deny rule blocking a host |
 | Repo map | Yes | Yes — answered a code question from the map alone |
 | Project index | Yes — imports of every kind, methods, constructors, interfaces, name clashes | Yes — indexed Forge itself: 30 methods, 236 call links, none pointing at nothing |
