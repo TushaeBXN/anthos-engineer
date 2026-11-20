@@ -512,6 +512,40 @@ These are tested action by action (`tests/presets.test.ts`) and were run for rea
 
 **Rule order matters.** The first rule that matches decides, and a file target like `**` matches paths outside the project too (they're absolute, such as `/Users/you/.ssh/id_ed25519`). So the presets list deny rules first, then `"/**"` for "outside the project", then `"**"` for everything in it. If you wrote your own policy with `target: "**"` to mean "the project", check it: it also covers your home folder.
 
+**Letting `verify` run without asking.** `verify` runs `npx tsc`, `npm test` and `npx eslint`, and the policy checks each one. Under `workspace-write` it asks every time, until you allow the three commands, for example by adding these rules to the shell section:
+
+```yaml
+  - id: allow-tsc
+    resource: shell
+    operation: npx tsc
+    target: "*"
+    effect: allow
+
+  - id: allow-tests
+    resource: shell
+    operation: npm test
+    target: "*"
+    effect: allow
+
+  - id: allow-eslint
+    resource: shell
+    operation: npx eslint
+    target: "*"
+    effect: allow
+```
+
+**This repository's own policy** is exactly that: `workspace-write` plus these three rules ([forge.policy.yaml](forge.policy.yaml)). It replaced an older hand-written policy with two problems. It allowed reading any file on the machine, `~/.ssh` and `~/.aws` included, because its read rule used `target: "**"`. And its list of folders Forge could edit was out of date, leaving out `agent/`, `tools/` and `tests/`, where most of the work happens. With the new policy, in this repo:
+
+| Action | Decision |
+|---|---|
+| Read `~/.ssh/id_ed25519` | deny |
+| Read `/etc/hosts` or `.env` | ask |
+| Edit `agent/loop.ts` | allow |
+| Edit `forge.policy.yaml` | deny |
+| `verify`, `npm test -- --watch` | allow |
+| `rm -rf dist`, `git commit` | ask |
+| `git push origin main` | deny |
+
 ---
 
 ## VS Code
