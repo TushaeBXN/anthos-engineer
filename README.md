@@ -371,7 +371,7 @@ Forge is one loop:
 - The 32k context wrapper (`num_ctx` Modelfile) is a manual step. Forge reads the window from Ollama once it's set, but doesn't create the Modelfile for you
 - Not yet run for real: Xcode, the VS Code extension, and a conversation on any provider other than Ollama (Anthropic included). Each is covered by tests against stand-ins; see [What has been tested](#what-has-been-tested-and-how)
 - The [sandbox](#sandbox) covers commands (`bash`, `verify`), not MCP servers, and limits where a command can write, not what it writes: a command can still change files in the project that run later, such as a test script or a Makefile
-- On Linux the sandbox needs bubblewrap and hasn't been run for real yet (only on macOS); on Windows there's no sandbox
+- On Linux the sandbox needs bubblewrap, and it's tested on GitHub's Ubuntu machines rather than a desktop Linux; on Windows there's no sandbox
 
 ---
 
@@ -413,7 +413,7 @@ A dash means I haven't confirmed it either way. Claude Code and OpenClaude are f
 |---|---|---|
 | Permission levels | A rule for each resource, action and target (allow, ask or deny), plus three ready-made presets | Three fixed modes: read-only, workspace-write, danger-full-access |
 | Sandbox on macOS | Yes (Seatbelt) | No, Linux only |
-| Sandbox on Linux | bubblewrap: the system is read-only and only the project is writable. Not yet run on a real Linux machine | Linux namespaces (`unshare`). Its "workspace-only" mode is passed to the command as an environment variable rather than blocking writes; it also points `HOME` at a folder inside the project |
+| Sandbox on Linux | bubblewrap: the system is read-only and only the project is writable. Escape tests run on Linux in CI | Linux namespaces (`unshare`). Its "workspace-only" mode is passed to the command as an environment variable rather than blocking writes; it also points `HOME` at a folder inside the project |
 | Policy file, audit log and git hooks protected from commands | Yes | No |
 | `~/.ssh`, `~/.aws`, `~/.gnupg` | Hidden from commands, and denied by every preset | Not blocked by the sandbox |
 | Record of every permission decision | Yes, a local audit log | None found |
@@ -443,7 +443,7 @@ A dash means I haven't confirmed it either way. Claude Code and OpenClaude are f
 | MCP | Yes, against a real MCP server (`tests/fixtures/mcp-server.ts`) | Yes — `forge-deepseek` used a server's tool; a tool with no rule was refused |
 | `forge doctor` | Yes, against a fake model server | Yes — on this Ollama setup, and on broken ones: invalid config, missing model, stopped server, missing key, and a fake key the real Anthropic API rejected |
 | Ready-made policies | Yes — every action under each policy | Yes on `forge-deepseek`: `read-only` refused every edit and command; `workspace-write` made the fix and refused unapproved commands. Installed fresh from npm and written with `forge policy use` |
-| Sandbox | Yes — settings, fallbacks and the Linux command line; on macOS, real escape attempts through the `bash` tool | Yes on `forge-deepseek` under `full-access`, so only the sandbox could stop anything: a write to the home folder was blocked, one in the project worked. Installed fresh from npm, `forge doctor` reports it active. **Linux not yet run on a real machine** |
+| Sandbox | Yes — settings and fallbacks, plus real escape attempts through the `bash` tool on macOS and on Linux (Ubuntu, in CI on every push) | Yes on `forge-deepseek` under `full-access`, so only the sandbox could stop anything: a write to the home folder was blocked, one in the project worked. Installed fresh from npm, `forge doctor` reports it active. On Linux, the escape tests pass on GitHub's Ubuntu machines; **not yet run with a model on Linux** |
 
 ---
 
@@ -581,13 +581,13 @@ The policy decides whether a command may run; the sandbox limits what it can do 
 | Change `.git/config` or `.git/hooks` (they'd run code later, outside the sandbox) | **blocked** |
 | Read or write `~/.ssh`, `~/.aws`, `~/.gnupg` | **blocked** |
 | Normal git: add, commit, branch | allowed |
-| Reach this machine (local model servers, test servers) | allowed |
+| Reach this machine (local model servers, test servers) | allowed. On Linux, blocked too when `sandboxNetwork` is off |
 | Reach the internet | allowed, or blocked with `sandboxNetwork off` |
 
 | Platform | How |
 |---|---|
 | macOS | Seatbelt (`sandbox-exec`), built into macOS |
-| Linux | [bubblewrap](https://github.com/containers/bubblewrap) (`bwrap`), if installed: `apt install bubblewrap` or `dnf install bubblewrap` |
+| Linux | [bubblewrap](https://github.com/containers/bubblewrap) (`bwrap`), if installed: `apt install bubblewrap` or `dnf install bubblewrap`. Forge tries it once at startup; where it can't start a sandbox (user namespaces turned off, as in some containers), `forge doctor` says why |
 | Windows | None yet |
 
 ```bash
@@ -599,9 +599,11 @@ forge config set sandboxNetwork off     # sandboxed commands can't reach the int
 
 `forge doctor` shows whether it's on. When a command fails because of it, Forge tells the model so, and the model can ask you to run that command yourself. `git push` over SSH needs your SSH key, which the sandbox hides, so push yourself or use HTTPS.
 
-**What it covers, and what it doesn't.** It covers commands Forge runs. Forge's own `read`, `write` and `edit` tools run inside Forge and are covered by the policy instead. MCP servers are started by you, from your config, and aren't sandboxed. The sandbox limits *where* a command can write, not *what*: a command can still change a file in the project that runs later, such as a test script or a Makefile, which is one more reason to review the diff.
+**What it covers, and what it doesn't.** It covers commands Forge runs. Forge's own `read`, `write` and `edit` tools run inside Forge and are covered by the policy instead. MCP servers are started by you, from your config, and aren't sandboxed. The sandbox limits *where* a command can write, not *what*: a command can still change a file in the project that runs later, such as a test script or a Makefile, which is one more reason to review the diff. On Linux, `forge.policy.yaml`, the audit log and `.git/hooks` are protected only if they exist when the command starts, so in a folder with no policy file a command could create one; on macOS they're protected either way.
 
-**Tested on macOS** (`tests/sandbox.test.ts`): Forge's own `bash` tool tried to write to the home folder, rewrite the policy file and the audit log, plant a git hook and change git config, read `~/.ssh`, and reach the internet with the network off. All were blocked, while writes in the project, a real git commit and a local server still worked. In a real run on `forge-deepseek` under the `full-access` policy, which allows everything, `touch ~/forge-escape-test.txt` was blocked and `touch notes.txt` in the project worked. The model then explained which was which. Forge's whole test suite also passes from inside the sandbox, the way `verify` runs it. The Linux path is built and its arguments are tested, but it hasn't been run on Linux yet.
+**Tested on macOS** (`tests/sandbox.test.ts`): Forge's own `bash` tool tried to write to the home folder, rewrite the policy file and the audit log, plant a git hook and change git config, read `~/.ssh`, and reach the internet with the network off. All were blocked, while writes in the project, a real git commit and a local server still worked. In a real run on `forge-deepseek` under the `full-access` policy, which allows everything, `touch ~/forge-escape-test.txt` was blocked and `touch notes.txt` in the project worked. The model then explained which was which. Forge's whole test suite also passes from inside the sandbox, the way `verify` runs it. 
+
+**Tested on Linux** (same file, in CI on every push): the same escape attempts run through bubblewrap on GitHub's Ubuntu machines, with a fake home folder and a fake SSH key. All were blocked, while writes in the project and `/tmp` and a real git commit still worked. One difference from macOS: with the network off, Linux gives the command a network of its own, so it can't reach servers on this machine either. Forge itself still reaches a local model; only commands are cut off. Not yet run with a model on Linux.
 
 **Compared with claw-code's.** [claw-code](https://github.com/ultraworkers/claw-code) also sandboxes commands, using Linux namespaces (`unshare`). It works only on Linux, and its "workspace-only" file mode sets an environment variable rather than blocking writes. Forge's sandbox blocks writes outside the project on macOS as well as Linux, and protects the policy, the audit log and git hooks inside it.
 
@@ -975,6 +977,8 @@ tests/                   # 305 tests; fixtures/ holds small MCP servers used by 
 npm test               # 305 tests
 ```
 
+CI runs them on Linux (Ubuntu) on every push to `main`, with bubblewrap installed, so the Linux sandbox tests run for real there; on a Mac, the macOS ones run instead.
+
 `npm audit` reports no known vulnerabilities in Forge's dependencies (as of 2026-11-18). This matters more than usual for an agent: the `glob` tool passes model-written patterns to `glob` and `minimatch`, so a denial-of-service bug in either could let text the model has read hang Forge.
 
 | Suite | Tests | Covers |
@@ -993,7 +997,7 @@ npm test               # 305 tests
 | `extractor` | 4 | The project indexer: functions and methods, calls across files, constructors, interfaces, never library files |
 | `presets` | 76 | Every action in the table above, under each ready-made policy, loaded from YAML the way Forge loads it; `verify` goes through the policy; `forge doctor` finds no problems in any of them |
 | `telemetry` | 2 | The circuit breaker; refused calls don't trip it |
-| `sandbox` | 14 | Settings and fallbacks, the Linux command line, and on macOS real escape attempts through the `bash` tool: home folder, policy file, audit log, git hooks and config, `~/.ssh`, the internet |
+| `sandbox` | 21 | Settings and fallbacks, the Linux command line, and real escape attempts through the `bash` tool on macOS and on Linux: home folder, policy file, audit log, git hooks and config, `~/.ssh`, the internet. Each OS's set skips on the other |
 | `doctor` | 12 | Each setup check against a fake model server: missing model, unreachable server, rejected or missing key (never printed), small window, policy problems, broken `~/.forgerc` |
 | `vscode` | 8 | Message formatting, every command, unsaved files |
 | `usage` | 14 | Model lookup, provider keys, status line, cost, budget |
