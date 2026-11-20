@@ -87,7 +87,8 @@ export function sandboxed(file: string, args: string[], cwd: string, status: San
 export function sandboxHint(output: string, status: SandboxStatus): string {
   if (!status.active || !/operation not permitted|permission denied|read-only file system|device or resource busy|could not resolve host|network is unreachable/i.test(output)) return "";
   // A protected path inside the project: say so, since "only inside the project" wouldn't explain it.
-  if (/forge\.policy\.yaml|\.forge\b|\.git\b/.test(output)) {
+  // Whole path parts only: ".forge-cache" or ".github" isn't one of them.
+  if (/(?:^|[\s/'"`])(?:forge\.policy\.yaml|\.forge|\.git)(?=$|[\s/'"`:])/m.test(output)) {
     return "\n(Forge's sandbox blocked this: even inside the project, commands can't change forge.policy.yaml or .forge, change git's config or hooks, or move, remove or create .git and .forge (so `git init` and `git config` are blocked). Ordinary git commands work. If this is needed, ask the user to run it.)";
   }
   return `\n(Forge's sandbox may have blocked this: commands can write only inside the project and temp folders${status.network ? "" : ", and can't reach the internet"}. If the command needs more, ask the user to run it.)`;

@@ -106,8 +106,9 @@ describe("sandbox — settings", () => {
     assert.match(sandboxHint("sh: forge.policy.yaml: Read-only file system", on), /can't change forge\.policy\.yaml/);
     assert.match(sandboxHint("mv: cannot move '.git' to '.git-old': Device or resource busy", on), /move, remove or create \.git/);
     assert.doesNotMatch(sandboxHint("touch: /Users/x/a.txt: Operation not permitted", on), /git init/);
-    // .github isn't .git
+    // Only whole path parts count: .github isn't .git, and .forge-cache isn't .forge.
     assert.doesNotMatch(sandboxHint("/p/.github/x: Operation not permitted", on), /git init/);
+    assert.doesNotMatch(sandboxHint("sh: /home/u/.forge-cache/x: Read-only file system", on), /git init/);
   });
 });
 
