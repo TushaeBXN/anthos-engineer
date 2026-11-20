@@ -861,7 +861,7 @@ Tests never read your `~/.forgerc`, so they give the same result on any machine.
 
 ## Releases
 
-The current version is **0.1.0**. Each release is on the [releases page](https://github.com/TushaeBXN/anthos-engineer/releases), with notes on what changed and the VS Code extension attached, and on [npm](https://www.npmjs.com/package/forge-anthos-intelligence).
+The current version is **0.2.0**. Each release is on the [releases page](https://github.com/TushaeBXN/anthos-engineer/releases), with notes on what changed and the VS Code extension attached, and on [npm](https://www.npmjs.com/package/forge-anthos-intelligence).
 
 To update to the newest release:
 
