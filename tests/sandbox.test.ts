@@ -162,7 +162,8 @@ describe("sandbox — Linux, for real", { skip: !linux ? "needs Linux" : inside 
       return;
     }
     // A home folder of our own, with a fake key in it, so the test never touches a real ~/.ssh.
-    home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "forge-home-")));
+    // It's inside the real home folder, not /tmp: the sandbox lets commands write in /tmp.
+    home = fs.realpathSync(fs.mkdtempSync(path.join(os.homedir(), ".forge-sandbox-test-")));
     fs.mkdirSync(path.join(home, ".ssh"));
     fs.writeFileSync(path.join(home, ".ssh", "id_test"), "SECRET-KEY");
     process.env["HOME"] = home;
