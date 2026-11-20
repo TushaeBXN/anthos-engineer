@@ -53,72 +53,65 @@ async function passingGate(cwd: string): Promise<VerifyGate> {
 before(async () => {
   tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "forge-git-test-"));
   await initRepo(tmpDir);
-  // forge.policy.yaml must be on disk; load from the real project root.
-  // The executor calls loadPolicy() which reads from process.cwd().
-  // We copy the real policy so tests match production rules.
-  const projectRoot = path.resolve(new URL(import.meta.url).pathname, "../..");
-  const policyPath = path.join(projectRoot, "forge.policy.yaml");
-  try {
-    await fs.copyFile(policyPath, path.join(tmpDir, "forge.policy.yaml"));
-  } catch {
-    // If running without the file (CI), write a permissive test policy.
-    await fs.writeFile(
-      path.join(tmpDir, "forge.policy.yaml"),
-      [
-        "version: 1",
-        "default: deny",
-        "rules:",
-        "  - id: deny-force-push",
-        "    resource: git",
-        "    operation: force-push",
-        "    target: '**'",
-        "    effect: deny",
-        "  - id: deny-push-main",
-        "    resource: git",
-        "    operation: push",
-        "    target: main",
-        "    effect: deny",
-        "  - id: allow-git-push",
-        "    resource: git",
-        "    operation: push",
-        "    target: 'forge/**'",
-        "    effect: allow",
-        "    requires_approval: true",
-        "  - id: allow-git-commit",
-        "    resource: git",
-        "    operation: commit",
-        "    target: '**'",
-        "    effect: allow",
-        "    requires_approval: true",
-        "  - id: allow-git-add",
-        "    resource: git",
-        "    operation: add",
-        "    target: '**'",
-        "    effect: allow",
-        "  - id: allow-git-branch",
-        "    resource: git",
-        "    operation: branch",
-        "    target: 'forge/**'",
-        "    effect: allow",
-        "  - id: allow-git-status",
-        "    resource: git",
-        "    operation: status",
-        "    target: '**'",
-        "    effect: allow",
-        "  - id: allow-git-diff",
-        "    resource: git",
-        "    operation: diff",
-        "    target: '**'",
-        "    effect: allow",
-        "  - id: allow-git-rev-parse",
-        "    resource: git",
-        "    operation: rev-parse",
-        "    target: '**'",
-        "    effect: allow",
-      ].join("\n"),
-      "utf8",
-    );
-  }
+  // The executor calls loadPolicy(), which reads forge.policy.yaml from process.cwd().
+  // These tests check the executor, so they use their own policy rather than this repo's
+  // (which may ask before commits, and the executor treats a missing rule as deny).
+  await fs.writeFile(
+    path.join(tmpDir, "forge.policy.yaml"),
+    [
+      "version: 1",
+      "default: deny",
+      "rules:",
+      "  - id: deny-force-push",
+      "    resource: git",
+      "    operation: force-push",
+      "    target: '**'",
+      "    effect: deny",
+      "  - id: deny-push-main",
+      "    resource: git",
+      "    operation: push",
+      "    target: main",
+      "    effect: deny",
+      "  - id: allow-git-push",
+      "    resource: git",
+      "    operation: push",
+      "    target: 'forge/**'",
+      "    effect: allow",
+      "    requires_approval: true",
+      "  - id: allow-git-commit",
+      "    resource: git",
+      "    operation: commit",
+      "    target: '**'",
+      "    effect: allow",
+      "    requires_approval: true",
+      "  - id: allow-git-add",
+      "    resource: git",
+      "    operation: add",
+      "    target: '**'",
+      "    effect: allow",
+      "  - id: allow-git-branch",
+      "    resource: git",
+      "    operation: branch",
+      "    target: 'forge/**'",
+      "    effect: allow",
+      "  - id: allow-git-status",
+      "    resource: git",
+      "    operation: status",
+      "    target: '**'",
+      "    effect: allow",
+      "  - id: allow-git-diff",
+      "    resource: git",
+      "    operation: diff",
+      "    target: '**'",
+      "    effect: allow",
+      "  - id: allow-git-rev-parse",
+      "    resource: git",
+      "    operation: rev-parse",
+      "    target: '**'",
+      "    effect: allow",
+    ].join("\n"),
+    "utf8",
+  );
   // Commit the policy file so it's tracked and doesn't pollute gitStatus tests.
   await execFileAsync("git", ["add", "forge.policy.yaml"], { cwd: tmpDir });
   await execFileAsync("git", ["commit", "-m", "add policy"], { cwd: tmpDir });
