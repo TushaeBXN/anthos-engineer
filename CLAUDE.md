@@ -54,6 +54,7 @@ Requires Node.js 22+. Choose a model once with `npx tsx cli/index.ts config set 
 | `agent/doctor.ts` | `forge doctor`: setup checks, each with a fix; writes nothing, never prints a key |
 | `agent/providers/anthropic.ts` | Anthropic SDK |
 | `agent/providers/openai.ts` | Every OpenAI-compatible provider (OpenAI, Gemini, OpenRouter, Groq, Ollama, …) |
+| `agent/providers/think.ts` | Keeps a model's `<think>` reasoning out of what is shown and kept |
 | `tools/files.ts` | read, write, edit |
 | `tools/search.ts` | glob, grep |
 | `tools/bash.ts` | bash |

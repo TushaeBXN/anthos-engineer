@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { bash } from "../tools/bash.js";
-import { countChangedLines, edit, read, write } from "../tools/files.js";
+import { countChangedLines, edit, nearMiss, read, write } from "../tools/files.js";
 import { glob, grep } from "../tools/search.js";
 
 function project(files: Record<string, string>): string {
@@ -20,13 +20,13 @@ describe("read", () => {
   test("returns numbered lines", async () => {
     const cwd = project({ "a.txt": "one\ntwo\nthree" });
     const result = await read.run({ path: "a.txt" }, cwd);
-    assert.match(result.output, /1 {2}one\n\s+2 {2}two\n\s+3 {2}three/);
+    assert.match(result.output, /1→one\n\s+2→two\n\s+3→three/);
   });
 
   test("offset and limit select a range and say what was left out", async () => {
     const cwd = project({ "a.txt": "one\ntwo\nthree\nfour" });
     const result = await read.run({ path: "a.txt", offset: 2, limit: 2 }, cwd);
-    assert.match(result.output, /2 {2}two\n\s+3 {2}three/);
+    assert.match(result.output, /2→two\n\s+3→three/);
     assert.doesNotMatch(result.output, /one/);
     assert.match(result.output, /lines 4–4 not shown/);
   });
@@ -146,5 +146,19 @@ describe("bash", () => {
   test("runs in the project folder", async () => {
     const cwd = fs.realpathSync(project({}));
     assert.equal((await bash.run({ command: "pwd" }, cwd)).output, cwd);
+  });
+});
+
+describe("edit — why old_string didn't match", () => {
+  const file = "export function f() {\n  for (let i = 0; i <= n; i++) {}\n}\n";
+  test("wrong indentation: shows the real line exactly", () => {
+    const why = nearMiss(file, "    for (let i = 0; i <= n; i++) {}");
+    assert.match(why, /line 2 is "  for \(let i = 0; i <= n; i\+\+\) \{\}"/);
+  });
+  test("line numbers copied from read", () => {
+    assert.match(nearMiss(file, "    2→  for (let i = 0; i <= n; i++) {}"), /line numbers/);
+  });
+  test("nothing similar", () => {
+    assert.match(nearMiss(file, "while (true)"), /copy the text exactly/);
   });
 });

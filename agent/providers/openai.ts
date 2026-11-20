@@ -6,6 +6,7 @@
 import OpenAI from "openai";
 import { CLEARED, SUMMARY_PROMPT, asText, carried, shortenForSummary, withSummary } from "../compaction.js";
 import type { Compaction, Reply, Session, ToolCall, ToolResult, ToolSpec } from "../types.js";
+import { ThinkFilter, looksLikeReasoningModel, stripThinking } from "./think.js";
 
 export function openaiSession(
   model: string,
@@ -25,6 +26,8 @@ export function openaiSession(
   let askForUsage = true;
   // After a compaction, the summary that starts the next message.
   let carry = "";
+  // Whether replies start with the model's thinking, to be held back until </think>.
+  let thinks = looksLikeReasoningModel(model);
 
   /** Add input to a message list: a user message, or one tool message per result. */
   const append = (list: OpenAI.Chat.ChatCompletionMessageParam[], input: string | ToolResult[]) => {
@@ -50,7 +53,7 @@ export function openaiSession(
           if (!(err instanceof OpenAI.APIError) || err.status !== 400) throw err;
           response = await make(false);
         }
-        const summary = (response.choices[0]?.message.content ?? "").trim();
+        const summary = stripThinking(response.choices[0]?.message.content ?? "", thinks).trim();
         if (!summary) throw new Error("empty summary");
         carry = carried(summary, latestRequest, pending);
         const cached = response.usage?.prompt_tokens_details?.cached_tokens ?? 0;
@@ -97,7 +100,9 @@ export function openaiSession(
         stream = await request();
       }
 
-      const reply = await collect(stream, onText);
+      const filter = new ThinkFilter(thinks);
+      const reply = await collect(stream, onText, filter);
+      if (filter.sawClose) thinks = true;
       messages.push({
         role: "assistant",
         // null only alongside tool calls: Ollama rejects an assistant message with neither (an empty reply).
@@ -121,8 +126,8 @@ export function openaiSession(
 export async function collect(
   stream: AsyncIterable<OpenAI.Chat.ChatCompletionChunk>,
   onText?: (delta: string) => void,
+  think: ThinkFilter = new ThinkFilter(false),
 ): Promise<Reply> {
-  let text = "";
   let finish: string | null = null;
   let usage: OpenAI.CompletionUsage | undefined;
   let sawAnything = false;
@@ -135,9 +140,12 @@ export async function collect(
     if (!choice) continue;
     sawAnything = true;
     const delta = choice.delta;
+    const separate = delta as { reasoning?: string; reasoning_content?: string } | undefined;
+    if (separate?.reasoning || separate?.reasoning_content) think.serverSeparates();
     if (delta?.content) {
-      text += delta.content;
-      onText?.(delta.content);
+      // The model's thinking is neither shown nor kept (see think.ts).
+      const shown = think.push(delta.content);
+      if (shown) onText?.(shown);
     }
     for (const piece of delta?.tool_calls ?? []) {
       const call = (calls[piece.index] ??= { id: "", name: "", args: "" });
@@ -148,6 +156,9 @@ export async function collect(
     if (choice.finish_reason) finish = choice.finish_reason;
   }
   if (!sawAnything) throw new Error("The model returned an empty response.");
+  const rest = think.end();
+  if (rest) onText?.(rest);
+  const text = think.text;
 
   const toolCalls: ToolCall[] = calls
     .filter((c) => c && c.name)

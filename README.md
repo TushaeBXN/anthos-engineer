@@ -443,7 +443,7 @@ A dash means I haven't confirmed it either way. Claude Code and OpenClaude are f
 | 13 providers | Key handling and addresses | Ollama and **Anthropic** (`claude-opus-5-5`): a real session read a file, found two bugs, edited the file and ran the tests after approval, for 5k tokens and $0.04. It found two bugs in Forge, both fixed in 0.4.3: `FORGE_PROVIDER` kept the saved Ollama model, and a command sent with an edit ran before it. Installed fresh from npm, 0.4.3's `forge doctor` picks `claude-opus-5-5` with `FORGE_PROVIDER=anthropic` and keeps the saved Ollama model without it. The other hosted addresses answered; **no real conversation on them yet** (needs each provider's key) |
 | VS Code extension | Yes, against a stand-in VS Code API; packages with `vsce` | Yes, in VS Code 1.147 (`tests/vscode-real`): the extension activates, Start opens Forge in the project folder, Repo Map and Undo reach it, unsaved files are refused, and after Forge quits the next command starts a new Forge. That run found a bug, fixed in extension 0.1.1: once Forge quit, questions went to the shell left in the terminal and ran as commands. Also run by hand with real Forge on `forge-deepseek`: Start and `/undo` worked, and with 0.1.1, Ask About Selection on line 3 of a file sent "Look at math.js line 3: Is this loop right?"; Forge read the file, found the off-by-one bug and fixed it |
 | Context compaction | Yes — trigger, carry-over, both providers' summary requests, fallback | Yes on `forge-deepseek`: compacted once mid-task (7.8k → 1.7k) and still answered correctly |
-| Streaming | Yes — local servers speaking the OpenAI and Anthropic stream formats | Yes on `forge-deepseek`: a reply arrived in 77 pieces over 6 s, and a turn with a tool call streamed too. On Anthropic, the session above ran over the streaming API, tool calls included |
+| Streaming | Yes — local servers speaking the OpenAI and Anthropic stream formats, and models' thinking kept out of the answer | Yes on `forge-deepseek`: a reply arrived in 77 pieces over 6 s, and a turn with a tool call streamed too. On Anthropic, the session above ran over the streaming API, tool calls included. With thinking hidden, `forge-deepseek` thought for about 3½ minutes (not shown, with the spinner running), then its answer streamed in 63 pieces with no `<think>` tags. The same question as in VS Code, "Look at math.js line 3: Is this loop right? Fix it if not.", now edited the file on the first try: before, three edits failed on the line-number spacing |
 | Xcode (through MCP) | Yes, against a server that replies the way Xcode's bridge does | **Not yet run with real Xcode** |
 | MCP | Yes, against a real MCP server (`tests/fixtures/mcp-server.ts`) | Yes — `forge-deepseek` used a server's tool; a tool with no rule was refused |
 | `forge doctor` | Yes, against a fake model server | Yes — on this Ollama setup, and on broken ones: invalid config, missing model, stopped server, missing key, and a fake key the real Anthropic API rejected |
@@ -949,7 +949,8 @@ agent/
 ├── sandbox.ts           # runs commands in the OS sandbox (macOS Seatbelt, Linux bubblewrap)
 └── providers/
     ├── anthropic.ts     # Claude via Anthropic SDK
-    └── openai.ts        # every OpenAI-compatible provider (OpenAI, Gemini, OpenRouter, Ollama, ...)
+    ├── openai.ts        # every OpenAI-compatible provider (OpenAI, Gemini, OpenRouter, Ollama, ...)
+    └── think.ts         # keeps a model's <think> reasoning out of its answer
 
 tools/
 ├── files.ts             # read, write, edit (write/edit capture undo snapshots)
@@ -978,7 +979,7 @@ model/                   # the project index behind forge init and find_dependen
 verify/chain.ts          # type check → tests → lint
 executor/git.ts          # guarded git helpers
 diff/semantic.ts         # semantic diff grouping
-tests/                   # 319 tests; fixtures/ holds small MCP servers used by them
+tests/                   # 331 tests; fixtures/ holds small MCP servers used by them
 ```
 
 ---
@@ -986,7 +987,7 @@ tests/                   # 319 tests; fixtures/ holds small MCP servers used by 
 ## Tests
 
 ```bash
-npm test               # 319 tests
+npm test               # 331 tests
 ```
 
 CI runs them on Linux (Ubuntu) on every push to `main`, with bubblewrap installed, so the Linux sandbox tests run for real there; on a Mac, the macOS ones run instead.
@@ -998,7 +999,8 @@ CI runs them on Linux (Ubuntu) on every push to `main`, with bubblewrap installe
 | `loop` | 19 | Tool calls and results, deny / ask / approve, unattended refusals, cut-off and empty replies, step and budget limits, tool calls run in the model's order |
 | `check` | 19 | Path escapes, symlinks, chained commands, git rules, protected files |
 | `policy` | 13 | Rule matching, deny-by-default, approval rules |
-| `tools` | 20 | read, write, edit, glob, grep, bash, line counting |
+| `tools` | 23 | read, write, edit, glob, grep, bash, line counting; why an edit didn't match (spacing, copied line numbers) |
+| `think` | 9 | A model's thinking kept out of what's shown and kept: a reply that starts mid-thought, `<think>` blocks split across pieces, a server that sends reasoning separately |
 | `web` | 16 | Search parsing, HTML to text, redirects, binary refusal, network policy |
 | `subagents` | 8 | Agent files, read-only `explore`, policy and audit inside children, shared usage |
 | `repomap` | 7 | Definitions per language (Swift included), ranking, budget |
@@ -1050,7 +1052,10 @@ npm install -g forge-anthos-intelligence@latest
 - `FORGE_PROVIDER=anthropic forge` with Ollama saved in `~/.forgerc` now uses Claude's default model. Before, it asked Anthropic for your Ollama model and failed with "not found". Set `FORGE_MODEL` to choose another.
 - When the model asks for an edit and a command in one reply, the command now runs after the edit. Before, commands ran first, so tests could run against the old file.
 
-**Not yet released** (on `main`): VS Code extension 0.1.1. In 0.1.0, once Forge quit inside its terminal, the next question was typed into the shell left behind and ran as a command, outside Forge's policy and sandbox. Now the terminal runs only Forge and ends when it does. Until the next release, build it yourself (see [VS Code](#vs-code)) or, after Forge quits, close its terminal before asking again.
+**Not yet released** (on `main`, in the next version):
+- VS Code extension 0.1.1. In 0.1.0, once Forge quit inside its terminal, the next question was typed into the shell left behind and ran as a command, outside Forge's policy and sandbox. Now the terminal runs only Forge and ends when it does. Until the next release, build it yourself (see [VS Code](#vs-code)) or, after Forge quits, close its terminal before asking again.
+- A model's thinking no longer shows up in its answer. Some local models (DeepSeek, Qwen3 and others through Ollama) put their reasoning in the reply, ending with `</think>`; Forge showed it, with the tag, as part of the answer. Now it's hidden and kept out of the conversation. Replies still stream; for a model known to think, Forge waits for `</think>` unless the server sends the reasoning separately, as Ollama usually does.
+- `read` shows lines as `3→  text` instead of `3    text`, so the line number can't be mistaken for indentation. A local model read `3    for` as four spaces of indent and its edits failed. When an edit's text isn't found, Forge now shows the nearest line exactly, or says the line numbers were copied in.
 
 The v0.4.0 tag points at `099be44`, one commit before a fix to a test file; the published code is the same.
 

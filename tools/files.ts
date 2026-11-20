@@ -9,7 +9,8 @@ const MAX_READ_LINES = 2000;
 export const read: Tool = {
   name: "read",
   description:
-    "Read a text file. Returns numbered lines. Read a file before you edit it. " +
+    "Read a text file. Each line is shown as its number, a →, then the line exactly as it is in the file; " +
+    "the number and → are not part of the file, so leave them out of edit's old_string. Read a file before you edit it. " +
     "For long files pass offset (first line, from 1) and limit (number of lines).",
   inputSchema: {
     type: "object",
@@ -28,7 +29,7 @@ export const read: Tool = {
     const start = Math.max(1, Number(input.offset ?? 1));
     const count = Math.min(MAX_READ_LINES, Number(input.limit ?? MAX_READ_LINES));
     const shown = all.slice(start - 1, start - 1 + count);
-    const body = shown.map((line, i) => `${String(start + i).padStart(5)}  ${line}`).join("\n");
+    const body = shown.map((line, i) => `${String(start + i).padStart(5)}→${line}`).join("\n");
     const end = start - 1 + shown.length;
     const more = end < all.length ? `\n(lines ${end + 1}–${all.length} not shown; pass offset to read them)` : "";
     return { output: body + more };
@@ -92,7 +93,7 @@ export function makeWriteTools(undo?: UndoStack): { write: Tool; edit: Tool } {
 
       const found = before.split(oldText).length - 1;
       if (oldText === "" || found === 0) {
-        return { output: `old_string was not found in ${input.path}. Read the file and copy the text exactly.`, isError: true };
+        return { output: `old_string was not found in ${input.path}. ${nearMiss(before, oldText)}`, isError: true };
       }
       if (found > 1 && input.replace_all !== true) {
         return {
@@ -138,4 +139,24 @@ export function countChangedLines(before: string, after: string): { added: numbe
   let removed = 0;
   for (const left of remaining.values()) removed += left;
   return { added, removed };
+}
+
+/**
+ * Why an edit's old_string didn't match, as far as can be told: line numbers copied from read,
+ * or the same line with different spacing. Small models often get indentation wrong.
+ */
+export function nearMiss(file: string, oldText: string): string {
+  if (/^\s*\d+(→|\t| {2})/m.test(oldText)) {
+    return "It looks like it includes line numbers from read; leave out the number and →, and copy only the text after them.";
+  }
+  const first = oldText.split("\n").map((l) => l.trim()).find((l) => l !== "");
+  if (first) {
+    const lines = file.split("\n");
+    const hits = lines.flatMap((line, i) => (line.trim() === first ? [i] : [])).slice(0, 3);
+    if (hits.length > 0) {
+      const shown = hits.map((i) => `line ${i + 1} is ${JSON.stringify(lines[i])}`).join("; ");
+      return `A line with the same text but different spacing exists: ${shown}. Copy it exactly, with its leading spaces or tabs.`;
+    }
+  }
+  return "Read the file and copy the text exactly, including spaces at the start of each line.";
 }

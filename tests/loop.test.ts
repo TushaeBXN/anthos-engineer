@@ -89,7 +89,7 @@ describe("runTurn", () => {
     assert.equal(fs.readFileSync(path.join(a.cwd, "src/a.ts"), "utf8"), "one\ntwo\n");
     const [, afterWrite, afterRead] = received as [string, ToolResult[], ToolResult[]];
     assert.deepEqual(afterWrite, [{ id: "1", output: "Created src/a.ts", isError: false }]);
-    assert.match(afterRead[0].output, /1 {2}one/);
+    assert.match(afterRead[0].output, /1→one/);
     assert.deepEqual(a.log, ["Write src/a.ts [+2 −0]", "Read src/a.ts", "say: Done."]);
   });
 
