@@ -31,6 +31,8 @@ export const bash: Tool = {
         { cwd, timeout: TIMEOUT_MS, maxBuffer: 10_000_000 },
         (error, stdout, stderr) => {
           const output = [stdout, stderr].filter(Boolean).join("\n").trim();
+          const setAside = launch.after?.() ?? "";
+          if (setAside) return resolve({ output: `${output}\n${setAside}`.trim(), isError: true });
           if (!error) return resolve({ output: output || "(no output)" });
           const why = error.killed ? `timed out after ${TIMEOUT_MS / 1000}s` : `exit code ${error.code ?? 1}`;
           resolve({ output: `${output}\n(${why})${sandboxHint(output, status)}`.trim(), isError: true });

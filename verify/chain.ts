@@ -44,6 +44,7 @@ async function runStage(
   cwd: string,
 ): Promise<StageResult> {
   const start = Date.now();
+  let setAside = "";
   // Each stage runs inside the sandbox, like any command Forge runs.
   const launch = sandboxed(binary, args, cwd);
   if ("error" in launch) return { stage, passed: false, stdout: "", stderr: launch.error, durationMs: 0, skipped: false };
@@ -51,7 +52,8 @@ async function runStage(
     const { stdout, stderr } = await execFileAsync(launch.file, launch.args, {
       cwd,
       timeout: 120_000,
-    });
+    }).finally(() => (setAside = launch.after?.() ?? ""));
+    if (setAside) return { stage, passed: false, stdout, stderr: `${stderr}\n${setAside}`.trim(), durationMs: Date.now() - start, skipped: false };
     return { stage, passed: true, stdout, stderr, durationMs: Date.now() - start, skipped: false };
   } catch (err) {
     const e = err as Error & { stdout?: string; stderr?: string };
@@ -59,7 +61,7 @@ async function runStage(
       stage,
       passed: false,
       stdout: e.stdout ?? "",
-      stderr: e.stderr ?? e.message,
+      stderr: [e.stderr ?? e.message, setAside].filter(Boolean).join("\n"),
       durationMs: Date.now() - start,
       skipped: false,
     };

@@ -8,7 +8,8 @@
  * Inside it:
  *   - writes are allowed only in the project and the temp folders;
  *   - forge.policy.yaml, the audit log, .git/config and .git/hooks can't be changed even there
- *     (a git hook or config would run code later, outside the sandbox);
+ *     (a git hook or config would run code later, outside the sandbox), and .git and .forge
+ *     can't be moved, removed or replaced;
  *   - ~/.ssh, ~/.aws and ~/.gnupg can't be read or written;
  *   - the internet can be switched off (sandboxNetwork off); this machine (localhost) stays reachable.
  *
@@ -39,7 +40,15 @@ export interface SandboxStatus {
 export interface Launch {
   file: string;
   args: string[];
+  /**
+   * Call once the command has finished. Returns a message when the command created a protected path
+   * that the sandbox couldn't guard because it didn't exist yet (Linux), which is now set aside; else "".
+   */
+  after?: () => string;
 }
+
+/** Paths in the project that commands must not change: Forge's rules and records, and git settings and hooks. */
+const PROTECTED = ["forge.policy.yaml", ".forge", ".forge/audit.db", ".git", ".git/config", ".git/hooks"];
 
 const SECRET_DIRS = [".ssh", ".aws", ".gnupg"];
 /** Set on every sandboxed command, so anything it starts (a test that runs Forge, say) knows it's already inside. */
@@ -100,8 +109,11 @@ export const SEATBELT_PROFILE = `(version 1)
   (regex #"^/dev/tty") (regex #"^/dev/fd/"))
 
 ; Even in the project: Forge's rules and records, and git settings and hooks (they run code later, unsandboxed).
+; .git and .forge themselves can't be moved, removed or created, so they can't be swapped for others.
 (deny file-write*
   (literal (string-append (param "PROJECT") "/forge.policy.yaml"))
+  (literal (string-append (param "PROJECT") "/.git"))
+  (literal (string-append (param "PROJECT") "/.forge"))
   (regex (string-append "^" (param "PROJECT_RE") "/\\\\.forge/audit\\\\.db"))
   (literal (string-append (param "PROJECT") "/.git/config"))
   (subpath (string-append (param "PROJECT") "/.git/hooks")))
@@ -136,7 +148,16 @@ function seatbelt(file: string, args: string[], project: string, network: boolea
 
 function bubblewrap(file: string, args: string[], project: string, network: boolean): Launch {
   const home = os.homedir();
-  const ro = (p: string) => (exists(p) ? ["--ro-bind", p, p] : []);
+  const at = (rel: string) => path.join(project, rel);
+  const ro = (rel: string) => (present(at(rel)) ? ["--ro-bind", at(rel), at(rel)] : []);
+  // Mounting a folder onto itself makes it a mount point, which can't be moved or removed; what's inside stays writable.
+  const pin = (rel: string) => {
+    const p = at(rel);
+    if (!present(p)) return [];
+    return fs.lstatSync(p).isDirectory() ? ["--bind", p, p] : ["--ro-bind", p, p];
+  };
+  // bubblewrap can only protect paths that exist. Note which don't, to check after the command.
+  const missing = PROTECTED.filter((rel) => !present(at(rel)));
   return {
     file: "bwrap",
     args: [
@@ -146,11 +167,13 @@ function bubblewrap(file: string, args: string[], project: string, network: bool
       "--unshare-pid",
       "--bind", "/tmp", "/tmp",
       "--bind", project, project,
-      // Read-only again inside the writable project (only possible for paths that exist).
-      ...ro(path.join(project, "forge.policy.yaml")),
-      ...ro(path.join(project, ".forge", "audit.db")),
-      ...ro(path.join(project, ".git", "config")),
-      ...ro(path.join(project, ".git", "hooks")),
+      // Pinned in place, then read-only again inside the writable project (only possible for paths that exist).
+      ...pin(".git"),
+      ...pin(".forge"),
+      ...ro("forge.policy.yaml"),
+      ...ro(".forge/audit.db"),
+      ...ro(".git/config"),
+      ...ro(".git/hooks"),
       // Credentials: an empty folder in their place.
       ...SECRET_DIRS.flatMap((d) => (exists(path.join(home, d)) ? ["--tmpfs", path.join(home, d)] : [])),
       ...(network ? [] : ["--unshare-net"]),
@@ -159,10 +182,45 @@ function bubblewrap(file: string, args: string[], project: string, network: bool
       "--chdir", project,
       "--", file, ...args,
     ],
+    after: () => setAside(project, missing),
   };
 }
 
+/**
+ * After a command: any protected path that didn't exist before and does now was made by the command.
+ * Rename it to "<name>.blocked-by-forge", so nothing reads or runs it and nothing is lost.
+ * The command's own processes are gone by now (it ran in its own process namespace), so none can recreate it.
+ */
+export function setAside(project: string, missing: string[]): string {
+  const moved: string[] = [];
+  for (const rel of missing) {
+    const p = path.join(project, rel);
+    // Inside a path already set aside (a new .git with its config), there's nothing left to move.
+    if (!present(p) || moved.some((m) => rel.startsWith(m + "/"))) continue;
+    let target = `${p}.blocked-by-forge`;
+    for (let n = 2; present(target); n++) target = `${p}.blocked-by-forge-${n}`;
+    try {
+      fs.renameSync(p, target);
+      moved.push(rel);
+    } catch {
+      moved.push(`${rel} (couldn't be moved: remove it yourself)`);
+    }
+  }
+  if (!moved.length) return "";
+  return `Forge's sandbox set aside ${moved.join(", ")}, which the command created: commands can't create Forge's policy or records, or git settings and hooks. Each was renamed to *.blocked-by-forge. If it's needed (git init, say), ask the user to do it.`;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+/** Exists, counting a symlink even when what it points to doesn't. */
+function present(p: string): boolean {
+  try {
+    fs.lstatSync(p);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function exists(p: string): boolean {
   try {

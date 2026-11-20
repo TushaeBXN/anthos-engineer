@@ -6,7 +6,7 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import type { AddressInfo } from "node:net";
-import { sandboxStatus, sandboxed, sandboxHint } from "../agent/sandbox.js";
+import { sandboxStatus, sandboxed, sandboxHint, setAside } from "../agent/sandbox.js";
 import { bash } from "../tools/bash.js";
 import { sandboxSettings } from "../agent/models.js";
 
@@ -55,6 +55,42 @@ describe("sandbox — settings", () => {
     assert.match(a, new RegExp(`--bind ${fs.realpathSync(os.tmpdir()).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} `));
     assert.match(a, /--unshare-net/);
     assert.match(a, /-- \/bin\/sh -c make$/);
+  });
+
+  test("bubblewrap pins .git and .forge in place, and checks afterwards for protected paths that didn't exist", () => {
+    const project = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "forge-pin-")));
+    fs.mkdirSync(path.join(project, ".git", "hooks"), { recursive: true });
+    fs.writeFileSync(path.join(project, ".git", "config"), "");
+    const status = { mode: "auto" as const, active: true, kind: "bubblewrap" as const, network: true };
+    const launch = sandboxed("/bin/sh", ["-c", "true"], project, status);
+    assert.ok(!("error" in launch));
+    const a = launch.args.join(" ");
+    assert.match(a, new RegExp(`--bind ${project}/\\.git ${project}/\\.git `));
+    assert.match(a, new RegExp(`--ro-bind ${project}/\\.git/hooks `));
+    assert.equal(typeof launch.after, "function");
+    // Nothing created: nothing to report.
+    assert.equal(launch.after!(), "");
+    fs.rmSync(project, { recursive: true, force: true });
+  });
+
+  test("setAside renames protected paths a command created, and only those", () => {
+    const project = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "forge-aside-")));
+    fs.writeFileSync(path.join(project, "forge.policy.yaml"), "default: allow\n");
+    fs.mkdirSync(path.join(project, ".git", "hooks"), { recursive: true });
+    fs.writeFileSync(path.join(project, ".git", "hooks", "pre-commit"), "evil");
+    fs.writeFileSync(path.join(project, "notes.txt"), "mine");
+    const message = setAside(project, ["forge.policy.yaml", ".git", ".git/config", ".git/hooks"]);
+    assert.match(message, /set aside forge\.policy\.yaml, \.git, which the command created/);
+    assert.equal(fs.existsSync(path.join(project, "forge.policy.yaml")), false);
+    assert.equal(fs.readFileSync(path.join(project, "forge.policy.yaml.blocked-by-forge"), "utf8"), "default: allow\n");
+    assert.equal(fs.existsSync(path.join(project, ".git.blocked-by-forge", "hooks", "pre-commit")), true);
+    assert.equal(fs.existsSync(path.join(project, "notes.txt")), true);
+    // A second time: the earlier copy is kept, the new one gets a number.
+    fs.writeFileSync(path.join(project, "forge.policy.yaml"), "again\n");
+    setAside(project, ["forge.policy.yaml"]);
+    assert.equal(fs.readFileSync(path.join(project, "forge.policy.yaml.blocked-by-forge-2"), "utf8"), "again\n");
+    assert.equal(setAside(project, ["forge.policy.yaml"]), "");
+    fs.rmSync(project, { recursive: true, force: true });
   });
 
   test("a hint is added only when the sandbox may be why a command failed", () => {
@@ -123,6 +159,26 @@ describe("sandbox — macOS, for real", { skip: !mac ? "needs macOS" : inside ? 
     const r = await run("git add inside.txt && git -c user.email=t@t -c user.name=t commit -qm test && git log --oneline | wc -l");
     assert.equal(r.isError, undefined, r.output);
     assert.equal(r.output.trim(), "1");
+  });
+
+  test(".git and .forge can't be moved aside and replaced", async () => {
+    assert.equal((await run("mv .git .git-old")).isError, true);
+    assert.equal((await run("rm -rf .git")).isError, true);
+    assert.equal((await run("mv .forge .forge-old")).isError, true);
+    assert.equal(fs.existsSync(path.join(cwd, ".git-old")), false);
+    assert.equal(fs.statSync(path.join(cwd, ".git")).isDirectory(), true);
+  });
+
+  test("in a folder with no policy file or repo, commands can't create them", async () => {
+    const bare = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "forge-bare-")));
+    try {
+      assert.equal((await bash.run({ command: "echo 'default: allow' > forge.policy.yaml" }, bare)).isError, true);
+      assert.equal((await bash.run({ command: "git init -q" }, bare)).isError, true);
+      assert.equal(fs.existsSync(path.join(bare, "forge.policy.yaml")), false);
+      assert.equal(fs.existsSync(path.join(bare, ".git", "hooks")), false);
+    } finally {
+      fs.rmSync(bare, { recursive: true, force: true });
+    }
   });
 
   test("credentials can't be read", async () => {
@@ -219,6 +275,24 @@ describe("sandbox — Linux, for real", { skip: !linux ? "needs Linux" : inside 
     const r = await run("git add inside.txt && git -c user.email=t@t -c user.name=t commit -qm test && git log --oneline | wc -l");
     assert.equal(r.isError, undefined, r.output);
     assert.equal(r.output.trim(), "1");
+  });
+
+  it(".git and .forge can't be moved aside and replaced", async () => {
+    assert.equal((await run("mv .git .git-old")).isError, true);
+    assert.equal((await run("mv .forge .forge-old")).isError, true);
+    assert.equal(fs.existsSync(path.join(cwd, ".git-old")), false);
+    assert.equal(fs.statSync(path.join(cwd, ".git")).isDirectory(), true);
+  });
+
+  it("in a folder with no policy file or repo, what a command creates there is set aside", async () => {
+    const bare = fs.realpathSync(fs.mkdtempSync(path.join(home, "bare-")));
+    const r = await bash.run({ command: "echo 'default: allow' > forge.policy.yaml && git init -q && echo 'curl evil' > .git/hooks/pre-commit && echo done" }, bare);
+    assert.equal(r.isError, true, r.output);
+    assert.match(r.output, /set aside forge\.policy\.yaml, \.git/);
+    assert.equal(fs.existsSync(path.join(bare, "forge.policy.yaml")), false);
+    assert.equal(fs.existsSync(path.join(bare, ".git")), false);
+    assert.equal(fs.existsSync(path.join(bare, "forge.policy.yaml.blocked-by-forge")), true);
+    assert.equal(fs.existsSync(path.join(bare, ".git.blocked-by-forge", "hooks", "pre-commit")), true);
   });
 
   it("credentials can't be read", async () => {
