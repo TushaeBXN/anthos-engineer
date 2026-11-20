@@ -45,7 +45,12 @@ forge config set model forge-deepseek
 ```
 
 ```bash
-# 5. Run it in any project folder
+# 5. In your project folder, choose how much Forge may do without asking (see Ready-made policies)
+forge policy use workspace-write
+```
+
+```bash
+# 6. Run it
 forge
 ```
 
@@ -55,6 +60,7 @@ forge
 npm install -g forge-anthos-intelligence
 forge config set provider anthropic
 export ANTHROPIC_API_KEY=sk-ant-...
+forge policy use workspace-write    # in your project folder
 forge
 ```
 
@@ -138,6 +144,8 @@ Every `⎿` line is a tool call that passed the policy check. Lines starting wit
 | `forge init` | Build the [project index](#project-index) for `forge query` and `find_dependents` |
 | `forge query <name>` | Show what depends on a function or module |
 | `forge providers` | List providers and whether each key is set |
+| `forge policy` | List the [ready-made policies](#ready-made-policies) |
+| `forge policy use <name>` | Write one to `forge.policy.yaml` in this folder (`--force` replaces an existing one, keeping it as `.bak`) |
 | `forge doctor [--json]` | [Check the setup](#checking-your-setup) and say how to fix what's wrong |
 | `forge serve [--port N]` | Run Forge as a gRPC service for editors, UIs and scripts |
 
@@ -331,6 +339,7 @@ Forge is one loop:
 - Proper agent loop — model → tools → model → repeat, not one-shot
 - Tool calling actually executes (reads files, writes, runs bash)
 - Policy check before every tool — allow / ask / deny
+- Ready-made policies — `forge policy use read-only`, `workspace-write` or `full-access`
 - `forge doctor` — checks the setup (model server, key, context window, policy, MCP) and says how to fix each problem
 - Parallel reads, sequential writes
 - File undo (`/undo`) — every write snapshotted before it happens
@@ -388,6 +397,7 @@ Forge started as a one-shot planner and was rebuilt to work like Claude Code: a 
 | Automatic context compaction | Yes | — | Yes — mid-task, with Ollama's window detected |
 | MCP | Yes | Yes | Yes — every MCP tool call goes through the policy; a project's servers need your OK |
 | Xcode (Apple's MCP bridge) | Yes | — | Yes, not yet tried with real Xcode |
+| Ready-made permission levels | Yes | — | Yes — read-only, workspace-write, full-access, written as a policy file you can edit |
 | Setup check (`doctor`) | Yes | — | Yes — includes the policy file and MCP servers |
 | Sandbox | Yes | — | No (v2) |
 
@@ -463,6 +473,42 @@ Anything that leaves your machine is the `network` resource. `web_search` is ope
 ```
 
 Every policy decision is logged to `.forge/audit.db`. Use `/audit` to review recent decisions.
+
+### Ready-made policies
+
+Writing rules from scratch is the hard part, so Forge comes with three. Each is written to `forge.policy.yaml` as an ordinary policy, with comments, for you to edit:
+
+```bash
+forge policy                          # list them
+forge policy show workspace-write     # print one
+forge policy use workspace-write      # write it to this folder
+```
+
+| Action | `read-only` | `workspace-write` | `full-access` |
+|---|---|---|---|
+| Read files in the project, search it | allow | allow | allow |
+| Read `.env` files | ask | ask | allow |
+| Read files outside the project | ask | ask | allow |
+| Write files in the project | **deny** | allow | allow |
+| Write files outside the project | **deny** | ask | allow |
+| `git status`, `diff`, `log`, `show` | allow | allow | allow |
+| `git add` | **deny** | allow | allow |
+| `git commit`, `git push` to a branch | **deny** | ask | allow |
+| `git push` to `main` or `master` | **deny** | **deny** | allow |
+| Shell commands, `verify` | **deny** | ask | allow |
+| Web search and fetch, MCP tools | ask | ask | allow |
+| Read or write `~/.ssh`, `~/.aws`, `~/.gnupg` | **deny** | **deny** | **deny** |
+| `git push --force` | **deny** | **deny** | **deny** |
+
+- **read-only** is for exploring or reviewing code you don't want touched.
+- **workspace-write** is the everyday choice: Forge edits the project freely and asks before anything that runs code, leaves the project or changes git history. To stop being asked about one command, uncomment the example in the file (`npm test`, say). Forge can edit `package.json`, so allowing `npm test` effectively lets it run any script it writes.
+- **full-access** runs everything without asking. Use it only in a container or on a machine where nothing can be lost.
+
+Whatever the policy says, Forge never writes `forge.policy.yaml`, `.forge/` or `.git/`. Unattended (`forge "<request>"` or `forge serve` with no one to approve), every "ask" is a no.
+
+These are tested action by action (`tests/presets.test.ts`) and were run for real on a local model: under `read-only`, every edit and shell command was refused and the file was untouched; under `workspace-write`, the fix was made, `git status` ran, and `ls` and `verify` were refused for lack of approval.
+
+**Rule order matters.** The first rule that matches decides, and a file target like `**` matches paths outside the project too (they're absolute, such as `/Users/you/.ssh/id_ed25519`). So the presets list deny rules first, then `"/**"` for "outside the project", then `"**"` for everything in it. If you wrote your own policy with `target: "**"` to mean "the project", check it: it also covers your home folder.
 
 ---
 
@@ -808,6 +854,7 @@ policy/
 ├── check.ts             # allow / ask / deny for one tool call
 ├── evaluator.ts         # match a request against the rules
 ├── parser.ts            # load forge.policy.yaml
+├── presets.ts           # read-only, workspace-write, full-access (forge policy use)
 └── audit.ts             # audit log (.forge/audit.db)
 
 vscode-extension/       # VS Code: Forge in the terminal panel, ask about a selection
@@ -821,7 +868,7 @@ model/                   # the project index behind forge init and find_dependen
 verify/chain.ts          # type check → tests → lint
 executor/git.ts          # guarded git helpers
 diff/semantic.ts         # semantic diff grouping
-tests/                   # 210 tests; fixtures/ holds small MCP servers used by them
+tests/                   # 291 tests; fixtures/ holds small MCP servers used by them
 ```
 
 ---
@@ -829,7 +876,7 @@ tests/                   # 210 tests; fixtures/ holds small MCP servers used by 
 ## Tests
 
 ```bash
-npm test               # 210 tests
+npm test               # 291 tests
 ```
 
 `npm audit` reports no known vulnerabilities in Forge's dependencies (as of 2026-11-18). This matters more than usual for an agent: the `glob` tool passes model-written patterns to `glob` and `minimatch`, so a denial-of-service bug in either could let text the model has read hang Forge.
@@ -837,17 +884,19 @@ npm test               # 210 tests
 | Suite | Tests | Covers |
 |---|---|---|
 | `loop` | 18 | Tool calls and results, deny / ask / approve, unattended refusals, cut-off and empty replies, step and budget limits |
-| `check` | 18 | Path escapes, symlinks, chained commands, git rules, protected files |
+| `check` | 19 | Path escapes, symlinks, chained commands, git rules, protected files |
 | `policy` | 13 | Rule matching, deny-by-default, approval rules |
 | `tools` | 20 | read, write, edit, glob, grep, bash, line counting |
 | `web` | 16 | Search parsing, HTML to text, redirects, binary refusal, network policy |
 | `subagents` | 8 | Agent files, read-only `explore`, policy and audit inside children, shared usage |
 | `repomap` | 7 | Definitions per language (Swift included), ranking, budget |
-| `streaming` | 9 | Both providers' stream formats, tool calls rebuilt from pieces, usage, tool input checks |
+| `streaming` | 11 | Both providers' stream formats, tool calls rebuilt from pieces, usage, tool input checks, empty replies |
 | `compaction` | 11 | When to compact, no repeat compacting, what's carried over, mid-task with pending tool results, both providers' summary requests, the fallback |
 | `grpc` | 5 | A full turn over a real connection, streamed text, approvals, token check |
 | `mcp` | 9 | A real MCP server: calls, errors, policy, project trust, a server that fails to start, replies like Xcode's bridge |
 | `extractor` | 4 | The project indexer: functions and methods, calls across files, constructors, interfaces, never library files |
+| `presets` | 76 | Every action in the table above, under each ready-made policy, loaded from YAML the way Forge loads it; `verify` goes through the policy; `forge doctor` finds no problems in any of them |
+| `telemetry` | 2 | The circuit breaker; refused calls don't trip it |
 | `doctor` | 12 | Each setup check against a fake model server: missing model, unreachable server, rejected or missing key (never printed), small window, policy problems, broken `~/.forgerc` |
 | `vscode` | 8 | Message formatting, every command, unsaved files |
 | `usage` | 14 | Model lookup, provider keys, status line, cost, budget |

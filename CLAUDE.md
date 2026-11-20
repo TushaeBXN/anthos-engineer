@@ -26,6 +26,7 @@ Requires Node.js 22+. Choose a model once with `npx tsx cli/index.ts config set 
 - **Anything that leaves the machine is `{ kind: "network" }` access**, checked per host. No tool fetches a URL without going through the policy.
 - **Each provider reads only its own key** (`keyEnv` in `agent/models.ts`). Never fall back to another provider's key.
 - **Sub-agents are agents, not shortcuts.** They run `runTurn` with the parent's policy, approver and audit; they never get the `task` tool.
+- **A tool that runs commands reports them as `{ kind: "shell" }` access**, even when it isn't `bash` (`verify` reports the type check, tests and lint), so the policy sees what will run.
 - **Every tool input is checked against its schema (`checkInput` in `agent/loop.ts`) before the policy check.** Streamed tool inputs are not validated by the provider.
 - **When no one can answer an "ask", the answer is no**, and the audit log says so truthfully.
 - **MCP tools are `{ kind: "mcp" }` access.** A project's servers start only after the person trusts them; nothing writes to `.forge/`.
@@ -59,6 +60,7 @@ Requires Node.js 22+. Choose a model once with `npx tsx cli/index.ts config set 
 | `policy/check.ts` | allow / ask / deny for one tool call |
 | `policy/evaluator.ts` | Match a request against the rules |
 | `policy/parser.ts` | Load forge.policy.yaml |
+| `policy/presets.ts` | Ready-made policies for `forge policy use` |
 | `policy/audit.ts` | Audit log (`.forge/audit.db`) |
 | `model/*` | Dependency index (`.forge/events.db`) |
 | `verify/chain.ts` | Type check → tests → lint |

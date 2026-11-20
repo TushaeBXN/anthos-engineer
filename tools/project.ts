@@ -1,6 +1,6 @@
 /** find_dependents and verify — Forge's own knowledge of the project. */
 import type { Tool } from "../agent/types.js";
-import { runVerificationChain } from "../verify/chain.js";
+import { VERIFY_COMMANDS, runVerificationChain } from "../verify/chain.js";
 
 export const findDependents: Tool = {
   name: "find_dependents",
@@ -54,7 +54,8 @@ export const verify: Tool = {
     "Check the project: type check, tests, then lint. Every stage runs even if an earlier one fails. " +
     "Run it after you change code, and fix what it reports.",
   inputSchema: { type: "object", properties: {}, required: [] },
-  access: () => ({ kind: "none" }),
+  // It runs the type checker, the tests and the linter, so the policy checks it as those commands.
+  access: () => ({ kind: "shell", command: VERIFY_COMMANDS }),
   label: () => "Verify",
   async run(_input, cwd) {
     const result = await runVerificationChain(cwd);

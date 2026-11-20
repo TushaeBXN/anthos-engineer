@@ -79,14 +79,15 @@ export function check(
 
 /**
  * The path the policy sees: relative when the file is inside the project,
- * absolute when it is not. Symlinks are resolved first, so a link inside the
- * project that points outside it is treated as outside.
+ * "." for the project folder itself, absolute when it is outside. Symlinks are
+ * resolved first, so a link inside the project that points outside it is treated as outside.
  */
 export function policyPath(filePath: string, cwd: string): string {
   const expanded = filePath.startsWith("~/") ? path.join(os.homedir(), filePath.slice(2)) : filePath;
   const absolute = realPath(path.resolve(cwd, expanded));
   const relative = path.relative(realPath(cwd), absolute);
-  const inside = relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative);
+  if (relative === "") return ".";
+  const inside = !relative.startsWith("..") && !path.isAbsolute(relative);
   return inside ? relative.split(path.sep).join("/") : absolute;
 }
 
@@ -104,7 +105,7 @@ function realPath(absolute: string): string {
 // ── Shell ─────────────────────────────────────────────────────────────────────
 
 /** Things we cannot see through: substitution, redirection, background jobs. */
-const OPAQUE = /\$\(|`|[<>]|&(?!&)/;
+const OPAQUE = /\$\(|`|[<>]|(?<!&)&(?!&)/;
 
 function checkShell(command: string, policy: ForgePolicy, who: Who): Verdict {
   // Check each command in a chain on its own, so `x && git push origin main`

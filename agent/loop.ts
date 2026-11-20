@@ -204,7 +204,7 @@ async function runTool(call: ToolCall, agent: Agent): Promise<ToolResult> {
 
   if (verdict.decision === "deny") {
     agent.screen.activity(label, "not allowed", true);
-    telemetry.record(call.name, false, 0, "denied by policy");
+    telemetry.record(call.name, false, 0, "denied by policy", true);
     return failed(
       call,
       `Not allowed by policy: ${verdict.reason}. Do not retry or work around it with another tool or address. ` +
@@ -214,7 +214,7 @@ async function runTool(call: ToolCall, agent: Agent): Promise<ToolResult> {
   if (verdict.decision === "ask" && agent.interactive === false) {
     agent.audit(humanDecision(access, false, agent.who, "Refused: no one was there to approve it"));
     agent.screen.activity(label, "needs approval, no one to ask", true);
-    telemetry.record(call.name, false, 0, "unattended");
+    telemetry.record(call.name, false, 0, "unattended", true);
     return failed(
       call,
       `This needs the user's approval (${verdict.reason}), and no one is available to give it, so it was not run. ` +
@@ -226,7 +226,7 @@ async function runTool(call: ToolCall, agent: Agent): Promise<ToolResult> {
     agent.audit(humanDecision(access, approved, agent.who));
     if (!approved) {
       agent.screen.activity(label, "declined", true);
-      telemetry.record(call.name, false, 0, "declined by user");
+      telemetry.record(call.name, false, 0, "declined by user", true);
       return failed(call, "The user declined this action. Ask them how they would like to proceed.");
     }
   }

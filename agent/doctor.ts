@@ -131,7 +131,7 @@ function policy(cwd: string): Check {
   const name = "Policy";
   const file = path.join(cwd, "forge.policy.yaml");
   if (!fs.existsSync(file)) {
-    return { name, state: "warn", detail: "no forge.policy.yaml here: Forge asks before every action, and refuses them all when no one is at the keyboard", fix: "Start from the example: https://github.com/TushaeBXN/anthos-engineer/blob/main/forge.policy.yaml" };
+    return { name, state: "warn", detail: "no forge.policy.yaml here: Forge asks before every action, and refuses them all when no one is at the keyboard", fix: "forge policy use workspace-write  (or forge policy to see all three)" };
   }
   try {
     const p = loadPolicy(file);

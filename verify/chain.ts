@@ -66,17 +66,27 @@ function skip(stage: StageName, reason: string): StageResult {
   return { stage, passed: true, stdout: "", stderr: "", durationMs: 0, skipped: true, skipReason: reason };
 }
 
+/**
+ * The commands the chain may run, as one shell line, so the policy can check verify like any
+ * other command: each part is checked on its own (a rule for "npm test" covers the test stage).
+ */
+export const VERIFY_COMMANDS = "npx tsc --noEmit && npm test && npx eslint .";
+
 export async function runVerificationChain(cwd = process.cwd()): Promise<ChainResult> {
   const stages: StageResult[] = [];
 
   // Stage 1 — type check
   // Prefer the project-local tsc so the chain works in directories that have
   // typescript installed but no global tsc (e.g. test temp dirs with a symlink).
+  // Without TypeScript installed, never let npx download a package named "tsc" (it isn't TypeScript).
   const localTsc = path.join(cwd, "node_modules", ".bin", "tsc");
-  const [tscBin, tscArgs]: [string, string[]] = fs.existsSync(localTsc)
-    ? [localTsc, ["--noEmit"]]
-    : ["npx", ["tsc", "--noEmit"]];
-  stages.push(await runStage("tsc", tscBin, tscArgs, cwd));
+  if (!fs.existsSync(path.join(cwd, "tsconfig.json"))) {
+    stages.push(skip("tsc", "No tsconfig.json found"));
+  } else if (fs.existsSync(localTsc)) {
+    stages.push(await runStage("tsc", localTsc, ["--noEmit"], cwd));
+  } else {
+    stages.push(await runStage("tsc", "npx", ["--no-install", "tsc", "--noEmit"], cwd));
+  }
 
   // Stage 2 — test runner (read test script from package.json)
   const pkgPath = path.join(cwd, "package.json");

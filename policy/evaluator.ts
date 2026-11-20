@@ -41,6 +41,8 @@ function expandHome(p: string): string {
 function targetMatches(ruleTarget: string, requestTarget: string): boolean {
   const pattern = expandHome(ruleTarget);
   const target = expandHome(requestTarget);
+  // "." is the project folder itself (glob and grep search it): a rule for everything in the project covers it.
+  if (target === ".") return pattern === "." || pattern === "**" || pattern === "*";
   // Exact match or glob
   return minimatch(target, pattern, { dot: true, matchBase: false });
 }

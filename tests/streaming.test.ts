@@ -168,6 +168,48 @@ describe("streaming — Anthropic", () => {
   });
 });
 
+describe("streaming — an empty reply stays valid to send back", () => {
+  test("OpenAI-compatible: the empty reply goes back as \"\", never null without tool calls (Ollama rejects that)", async () => {
+    const server = await sseServer(() => ({ events: [chunk({ delta: { role: "assistant" } }), chunk({ delta: {}, finish_reason: "stop" }), "data: [DONE]\n\n"] }));
+    try {
+      const session = openaiSession("m", "system", [READ], server.url, "k");
+      await session.send("go");
+      await session.send("answer now");
+      const messages = server.bodies.at(-1)!["messages"] as { role: string; content: unknown }[];
+      assert.deepEqual(messages.map((m) => m.role), ["system", "user", "assistant", "user"]);
+      assert.equal(messages[2]!.content, "");
+    } finally {
+      server.close();
+    }
+  });
+
+  test("Anthropic: an empty reply isn't sent back at all (the API requires content)", async () => {
+    const server = await sseServer(() => ({
+      events: [
+        sse("message_start", { message: { id: "msg_2", type: "message", role: "assistant", model: "claude-test", content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 5, output_tokens: 0 } } }),
+        sse("message_delta", { delta: { stop_reason: "end_turn", stop_sequence: null }, usage: { output_tokens: 0 } }),
+        sse("message_stop", {}),
+      ],
+    }));
+    const saved = { url: process.env["ANTHROPIC_BASE_URL"], key: process.env["ANTHROPIC_API_KEY"] };
+    process.env["ANTHROPIC_BASE_URL"] = server.url;
+    process.env["ANTHROPIC_API_KEY"] = "test-key";
+    try {
+      const session = anthropicSession("claude-test", "system", [READ]);
+      await session.send("go");
+      await session.send("answer now");
+      const messages = server.bodies.at(-1)!["messages"] as { role: string }[];
+      assert.deepEqual(messages.map((m) => m.role), ["user", "user"]);
+    } finally {
+      server.close();
+      if (saved.url === undefined) delete process.env["ANTHROPIC_BASE_URL"];
+      else process.env["ANTHROPIC_BASE_URL"] = saved.url;
+      if (saved.key === undefined) delete process.env["ANTHROPIC_API_KEY"];
+      else process.env["ANTHROPIC_API_KEY"] = saved.key;
+    }
+  });
+});
+
 describe("streaming — the loop", () => {
   const says = (text: string): Reply => ({ text, toolCalls: [], usage: { inputTokens: 1, cachedTokens: 0, outputTokens: 1 }, stopped: "done" });
   function agentWith(screen: Screen, pieces: string[]): Agent {

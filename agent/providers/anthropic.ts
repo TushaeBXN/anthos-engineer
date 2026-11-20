@@ -98,7 +98,8 @@ export function anthropicSession(model: string, system: string, tools: ToolSpec[
 
       // Keep the reply exactly as it came, thinking blocks included: the API
       // needs them back unchanged on the next request.
-      messages.push({ role: "assistant", content: response.content });
+      // An empty reply can't be sent back (the API requires content); the next user message just follows on.
+      if (response.content.length > 0) messages.push({ role: "assistant", content: response.content });
 
       const text = response.content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("\n");
       const toolCalls = response.content.flatMap((block) =>

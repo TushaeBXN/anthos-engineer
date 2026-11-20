@@ -89,9 +89,16 @@ describe("check — shell", () => {
     assert.equal(run("npm test && rm -rf build"), "ask");
   });
 
-  test("redirection and substitution → ask even on an allowed command", () => {
+  test("redirection, substitution and background jobs → ask even on an allowed command", () => {
     assert.equal(run("npm test > out.txt"), "ask");
     assert.equal(run("npm test $(cat x)"), "ask");
+    assert.equal(run("npm test &"), "ask");
+    assert.equal(run("npm test & rm -rf build"), "ask");
+  });
+
+  test("allowed commands chained with && → allow (&& is not a background job)", () => {
+    assert.equal(run("npm test && git status"), "allow");
+    assert.equal(run("npm test&&npm test"), "allow");
   });
 
   test("git push to main → deny, alone or hidden in a chain", () => {

@@ -6,7 +6,8 @@
  *
  * Circuit breaker: after MAX_CONSECUTIVE_FAILURES failures of the same tool
  * (by name, not by arguments), the tool is blocked for the rest of the session
- * so the model can't thrash on a broken tool indefinitely.
+ * so the model can't thrash on a broken tool indefinitely. A call the policy or the person
+ * refused never ran, so it says nothing about whether the tool works and doesn't count.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -44,7 +45,8 @@ export class Telemetry {
     return (this.stats.get(toolName)?.consecutiveFailures ?? 0) >= MAX_CONSECUTIVE_FAILURES;
   }
 
-  record(toolName: string, success: boolean, durationMs: number, error?: string): void {
+  /** refused: the call never ran (policy, person, or no one to ask); logged, but not a failure of the tool. */
+  record(toolName: string, success: boolean, durationMs: number, error?: string, refused = false): void {
     const existing = this.stats.get(toolName) ?? {
       totalCalls: 0,
       successes: 0,
@@ -57,7 +59,7 @@ export class Telemetry {
       totalCalls: existing.totalCalls + 1,
       successes: success ? existing.successes + 1 : existing.successes,
       failures: success ? existing.failures : existing.failures + 1,
-      consecutiveFailures: success ? 0 : existing.consecutiveFailures + 1,
+      consecutiveFailures: success ? 0 : refused ? existing.consecutiveFailures : existing.consecutiveFailures + 1,
       totalDurationMs: existing.totalDurationMs + durationMs,
     });
 

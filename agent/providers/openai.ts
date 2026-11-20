@@ -100,7 +100,8 @@ export function openaiSession(
       const reply = await collect(stream, onText);
       messages.push({
         role: "assistant",
-        content: reply.text || null,
+        // null only alongside tool calls: Ollama rejects an assistant message with neither (an empty reply).
+        content: reply.text || (reply.toolCalls.length > 0 ? null : ""),
         ...(reply.toolCalls.length > 0
           ? {
               tool_calls: reply.toolCalls.map((c) => ({

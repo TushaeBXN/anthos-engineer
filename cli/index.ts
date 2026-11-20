@@ -5,6 +5,7 @@
  *   forge                 Start a conversation
  *   forge "<request>"     Do one thing and exit
  *   forge doctor          Check the setup
+ *   forge policy          Ready-made policies for forge.policy.yaml
  *   forge init            Index the project, for find_dependents
  *   forge query <name>    Show what depends on a function or module
  */
@@ -21,6 +22,8 @@ const HELP = `
   forge "<request>"              Do one thing and exit
   forge doctor [--json]          Check the setup and say how to fix what's wrong
   forge providers                List providers and the key each needs
+  forge policy                   List the ready-made policies
+  forge policy use <name>        Write one to forge.policy.yaml in this folder
   forge serve [--port N]         Run Forge as a gRPC service (grpc/forge.proto)
   forge init                     Index the project
   forge query <name>             Show what depends on a function or module
@@ -169,6 +172,38 @@ async function doctor(args: string[]): Promise<void> {
   if (checks.some((c) => c.state === "fail")) process.exitCode = 1;
 }
 
+/**
+ * forge policy                       list the ready-made policies
+ * forge policy show <name>           print one
+ * forge policy use <name> [--force]  write it to ./forge.policy.yaml (an existing file is kept as .bak)
+ */
+async function policyCommand(args: string[]): Promise<void> {
+  const fs = (await import("node:fs")).default;
+  const path = (await import("node:path")).default;
+  const { PRESETS, preset } = await import("../policy/presets.js");
+  const file = path.join(process.cwd(), "forge.policy.yaml");
+  const [sub, name] = args;
+
+  if (sub === undefined || sub === "list") {
+    console.log("");
+    for (const p of PRESETS) console.log(`  ${p.name.padEnd(16)} ${p.summary}`);
+    console.log(`\n  ${fs.existsSync(file) ? "This folder has a forge.policy.yaml." : "This folder has no forge.policy.yaml, so Forge asks before every action."}`);
+    console.log("  Use one:  forge policy use workspace-write\n  See one:  forge policy show read-only\n");
+    return;
+  }
+  const chosen = name ? preset(name) : undefined;
+  if (!chosen) throw new Error(`Choose one of: ${PRESETS.map((p) => p.name).join(", ")}`);
+  if (sub === "show") return void console.log(chosen.yaml);
+  if (sub !== "use") throw new Error(`Unknown policy subcommand: ${sub}. Use "use" or "show".`);
+
+  if (fs.existsSync(file)) {
+    if (!args.includes("--force")) throw new Error(`This folder already has a forge.policy.yaml. Add --force to replace it (the old one is kept as forge.policy.yaml.bak).`);
+    fs.copyFileSync(file, `${file}.bak`);
+  }
+  fs.writeFileSync(file, chosen.yaml, "utf8");
+  console.log(`\n  Wrote ${file}: ${chosen.name}.\n  ${chosen.summary}${args.includes("--force") ? "\n  The old policy is in forge.policy.yaml.bak." : ""}\n`);
+}
+
 async function query(name: string): Promise<void> {
   const { findDependents } = await import("../tools/project.js");
   const result = await findDependents.run({ name }, process.cwd());
@@ -184,6 +219,7 @@ async function main(): Promise<void> {
   if (command === "init") return init();
   if (command === "providers") return providers();
   if (command === "doctor") return doctor(rest);
+  if (command === "policy") return policyCommand(rest);
   if (command === "serve") return serve(rest);
   if (command === "config") {
     const [sub, key, ...vals] = rest;
