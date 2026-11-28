@@ -155,9 +155,11 @@ function providers(): void {
   }
   console.log("");
   for (const [name, p] of Object.entries(PROVIDERS)) {
-    const key = p.keyEnv ? `${p.keyEnv} ${process.env[p.keyEnv] ? "(set)" : "(not set)"}` : "no key needed";
+    const key = p.keyEnv
+      ? p.keyOptional && !process.env[p.keyEnv] ? `${p.keyEnv} (only when remote)` : `${p.keyEnv} ${process.env[p.keyEnv] ? "(set)" : "(not set)"}`
+      : "no key needed";
     const mark = name === current ? "▶" : " ";
-    console.log(`  ${mark} ${name.padEnd(11)} ${`${p.weights} · ${p.runs}`.padEnd(18)} ${key.padEnd(32)} ${p.note ?? ""}`);
+    console.log(`  ${mark} ${name.padEnd(11)} ${`${p.weights} · ${p.runs}`.padEnd(18)} ${key.padEnd(38)} ${p.note ?? ""}`);
   }
   console.log(`
   Any other OpenAI-compatible server:

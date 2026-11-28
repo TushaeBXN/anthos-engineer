@@ -292,6 +292,7 @@ Run `forge providers` to see this list with which keys you already have set.
 | Cerebras | `cerebras` | open | hosted | `CEREBRAS_API_KEY` |
 | Ollama | `ollama` | open | local | none |
 | LM Studio | `lmstudio` | open | local | none |
+| [Magnitude](https://github.com/magnitudedev/magnitude) | `magnitude` | open | local | none on this computer; `MAGNITUDE_API_KEY` from another one |
 | Any OpenAI-compatible server | any name | unknown | hosted | `FORGE_API_KEY` (optional) + `baseUrl` |
 
 Switching is two commands, and the key goes in your shell, never in `~/.forgerc` (that file is plain text):
@@ -305,6 +306,16 @@ forge config set model <model id from openrouter.ai/models>
 Each provider reads only its own key, so your OpenAI key is never sent to OpenRouter, Groq, or anyone else. If the key is missing, Forge stops before sending anything and tells you which variable to set. Most providers have no default model: pick one from the provider's model list.
 
 "Weights" is shown as `unknown` where one API serves both open and closed models (Mistral, OpenRouter).
+
+**Magnitude** ([magnitude.dev](https://magnitude.dev), free, Apache 2.0) runs large open models on everyday Macs and PCs by spreading them across GPU, RAM and SSD. Download a model in its app, then:
+
+```bash
+forge config set provider magnitude
+forge doctor                         # lists the model IDs Magnitude has
+forge config set model <id>          # e.g. gemma-4-e4b-it-qat:gguf:q4
+```
+
+Forge reads each model's context window from Magnitude. For Magnitude on another computer, set `forge config set baseUrl http://ADDRESS:10100/inference/v1` and `export MAGNITUDE_API_KEY=...`.
 
 **Recommended local model** (via Ollama):
 
@@ -371,7 +382,7 @@ Forge is one loop:
 - Automatic context compaction — long tasks are summarized before they outgrow the model's context window, even mid-task
 - Claude Code-style terminal UI (panel header, braille spinner, `⎿` hooks), with replies streamed as they are written
 - Every tool input checked against the tool's schema (required fields, types, allowed values) before the policy check
-- 13 providers: Anthropic, OpenAI, Gemini, xAI, Mistral, DeepSeek, OpenRouter, Groq, Together, Fireworks, Cerebras, Ollama, LM Studio — plus any OpenAI-compatible server
+- 14 providers: Anthropic, OpenAI, Gemini, xAI, Mistral, DeepSeek, OpenRouter, Groq, Together, Fireworks, Cerebras, Ollama, LM Studio, Magnitude — plus any OpenAI-compatible server
 - Works with local models for free, no API key needed
 - Installs from npm: `npm install -g forge-anthos-intelligence`
 
@@ -453,7 +464,7 @@ A dash means I haven't confirmed it either way. Claude Code and OpenClaude are f
 | Project index | Yes — imports of every kind, methods, constructors, interfaces, name clashes | Yes — indexed Forge itself: 30 methods, 236 call links, none pointing at nothing |
 | Sub-agents | Yes, including two in parallel | Yes — `explore` found the right file and line |
 | gRPC server | Yes, over a real connection | Yes — `forge serve` + the example client |
-| 13 providers | Key handling and addresses | Ollama and **Anthropic** (`claude-opus-5-5`): a real session read a file, found two bugs, edited the file and ran the tests after approval, for 5k tokens and $0.04. It found two bugs in Forge, both fixed in 0.4.3: `FORGE_PROVIDER` kept the saved Ollama model, and a command sent with an edit ran before it. Installed fresh from npm, 0.4.3's `forge doctor` picks `claude-opus-5-5` with `FORGE_PROVIDER=anthropic` and keeps the saved Ollama model without it. The other hosted addresses answered; **no real conversation on them yet** (needs each provider's key) |
+| 14 providers | Key handling and addresses; Magnitude against a stand-in with its real paths and model-list format | Ollama and **Anthropic** (`claude-opus-5-5`): a real session read a file, found two bugs, edited the file and ran the tests after approval, for 5k tokens and $0.04. It found two bugs in Forge, both fixed in 0.4.3: `FORGE_PROVIDER` kept the saved Ollama model, and a command sent with an edit ran before it. Installed fresh from npm, 0.4.3's `forge doctor` picks `claude-opus-5-5` with `FORGE_PROVIDER=anthropic` and keeps the saved Ollama model without it. The other hosted addresses answered; **no real conversation on them yet** (needs each provider's key). **Magnitude not yet run for real** (not installed here) |
 | VS Code extension | Yes, against a stand-in VS Code API; packages with `vsce` | Yes, in VS Code 1.147 (`tests/vscode-real`): the extension activates, Start opens Forge in the project folder, Repo Map and Undo reach it, unsaved files are refused, and after Forge quits the next command starts a new Forge. That run found a bug, fixed in extension 0.1.1: once Forge quit, questions went to the shell left in the terminal and ran as commands. Also run by hand with real Forge on `forge-deepseek`: Start and `/undo` worked, and with 0.1.1, Ask About Selection on line 3 of a file sent "Look at math.js line 3: Is this loop right?"; Forge read the file, found the off-by-one bug and fixed it |
 | Context compaction | Yes — trigger, carry-over, both providers' summary requests, fallback | Yes on `forge-deepseek`: compacted once mid-task (7.8k → 1.7k) and still answered correctly |
 | Streaming | Yes — local servers speaking the OpenAI and Anthropic stream formats, and models' thinking kept out of the answer | Yes on `forge-deepseek`: a reply arrived in 77 pieces over 6 s, and a turn with a tool call streamed too. On Anthropic, the session above ran over the streaming API, tool calls included. With thinking hidden, `forge-deepseek` thought for about 3½ minutes (not shown, with the spinner running), then its answer streamed in 63 pieces with no `<think>` tags. The same question as in VS Code, "Look at math.js line 3: Is this loop right? Fix it if not.", now edited the file on the first try: before, three edits failed on the line-number spacing |
@@ -1004,7 +1015,7 @@ model/                   # the project index behind forge init and find_dependen
 verify/chain.ts          # type check → tests → lint
 executor/git.ts          # guarded git helpers
 diff/semantic.ts         # semantic diff grouping
-tests/                   # 331 tests; fixtures/ holds small MCP servers used by them
+tests/                   # 339 tests; fixtures/ holds small MCP servers used by them
 ```
 
 ---
@@ -1012,7 +1023,7 @@ tests/                   # 331 tests; fixtures/ holds small MCP servers used by 
 ## Tests
 
 ```bash
-npm test               # 331 tests
+npm test               # 339 tests
 ```
 
 CI runs them on Linux (Ubuntu) on every push to `main`, with bubblewrap installed, so the Linux sandbox tests run for real there; on a Mac, the macOS ones run instead.
@@ -1037,6 +1048,7 @@ CI runs them on Linux (Ubuntu) on every push to `main`, with bubblewrap installe
 | `presets` | 76 | Every action in the table above, under each ready-made policy, loaded from YAML the way Forge loads it; `verify` goes through the policy; `forge doctor` finds no problems in any of them |
 | `telemetry` | 2 | The circuit breaker; refused calls don't trip it |
 | `sandbox` | 28 | Settings and fallbacks, the Linux command line, setting aside what a command created, the hint the model gets, and real escape attempts through the `bash` tool on macOS and on Linux: home folder, policy file, audit log, git hooks and config, swapping `.git`, creating a policy file or repo, `~/.ssh`, the internet. Each OS's set skips on the other |
+| `magnitude` | 8 | The Magnitude provider against a stand-in with its paths and model-list format: address, optional key, model list, context window, a streamed reply |
 | `doctor` | 12 | Each setup check against a fake model server: missing model, unreachable server, rejected or missing key (never printed), small window, policy problems, broken `~/.forgerc` |
 | `vscode` | 9 | Message formatting, every command, unsaved files, a new Forge after the old one quits |
 | `models` | 4 | `~/.forgerc`'s model applies only to its own provider; `FORGE_PROVIDER` and `FORGE_MODEL` |
@@ -1077,6 +1089,8 @@ npm install -g forge-anthos-intelligence@latest
 - An option Forge doesn't know, such as `forge --verison`, now stops with an error. Before, it was sent to the model as a request.
 - `FORGE_PROVIDER=anthropic forge` with Ollama saved in `~/.forgerc` now uses Claude's default model. Before, it asked Anthropic for your Ollama model and failed with "not found". Set `FORGE_MODEL` to choose another.
 - When the model asks for an edit and a command in one reply, the command now runs after the edit. Before, commands ran first, so tests could run against the old file.
+
+**Not yet released** (on `main`): the [Magnitude](https://github.com/magnitudedev/magnitude) provider (`forge config set provider magnitude`). With a local server and no model chosen, `forge doctor` lists the models it has.
 
 **Updating from 0.4.3:**
 - **Update the VS Code extension to 0.1.1** (attached to the release). In 0.1.0, once Forge quit inside its terminal, the next question was typed into the shell left behind and ran as a command, outside Forge's policy and sandbox. Now the terminal runs only Forge and ends when it does.

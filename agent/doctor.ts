@@ -8,7 +8,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
-import { RC_PATH, detectContextWindow, rcProblem, resolveModel, type ModelInfo } from "./models.js";
+import { PROVIDERS, RC_PATH, chosenProvider, detectContextWindow, rcProblem, resolveModel, type ModelInfo } from "./models.js";
 import { loadPolicy } from "../policy/parser.js";
 import { sandboxStatus } from "./sandbox.js";
 
@@ -45,7 +45,15 @@ export async function runDoctor(options: DoctorOptions): Promise<Check[]> {
     info = resolveModel(env);
     checks.push({ name: "Model", state: "ok", detail: `${info.provider} / ${info.model} (${info.weights} weights, ${info.runs === "local" ? "runs on this machine" : "hosted: your code is sent to the provider"})` });
   } catch (err) {
-    checks.push({ name: "Model", state: "fail", detail: (err as Error).message, fix: "forge providers  (then forge config set provider <name> and forge config set model <name>)" });
+    // For a local server with no model chosen, say which models it has.
+    const offered = await localModels(env);
+    checks.push(
+      offered?.answered
+        ? { name: "Model", state: "fail", detail: `No model chosen. ${offered.text}`, fix: "forge config set model <id>, using one of those IDs" }
+        : offered
+          ? { name: "Model", state: "fail", detail: `No model chosen, and ${offered.text}`, fix: `${startFix(offered.provider)}; then run forge doctor again to see its models` }
+          : { name: "Model", state: "fail", detail: (err as Error).message, fix: "forge providers  (then forge config set provider <name> and forge config set model <name>)" },
+    );
   }
 
   if (info) {
@@ -79,7 +87,33 @@ function config(): Check {
 function apiKey(info: ModelInfo): Check {
   if (!info.keyEnv) return { name: "API key", state: "ok", detail: "none needed" };
   if (info.apiKey) return { name: "API key", state: "ok", detail: `${info.keyEnv} is set` };
+  if (info.keyOptional) return { name: "API key", state: "ok", detail: `none needed on this computer; for a server on another computer, set ${info.keyEnv}` };
   return { name: "API key", state: "fail", detail: `${info.keyEnv} is not set`, fix: `export ${info.keyEnv}=...  (in your shell profile; Forge never stores keys in ~/.forgerc)` };
+}
+
+/** For a chosen local server: the models it has, or that it isn't answering. Null when it isn't a local server. */
+async function localModels(env: Record<string, string | undefined>): Promise<{ provider: string; answered: boolean; text: string } | null> {
+  const { provider, baseUrl } = chosenProvider(env);
+  if (PROVIDERS[provider]?.runs !== "local" || !baseUrl) return null;
+  try {
+    const res = await fetch(`${baseUrl.replace(/\/$/, "")}/models`, { signal: AbortSignal.timeout(3_000) });
+    if (!res.ok) return null;
+    const ids = ((await res.json()) as { data?: Array<{ id?: string }> }).data?.map((m) => m.id).filter(Boolean) ?? [];
+    const text = ids.length > 0
+      ? `${provider} has: ${ids.slice(0, 8).join(", ")}${ids.length > 8 ? ", …" : ""}.`
+      : `${provider} answered but has no models yet; download one first.`;
+    return { provider, answered: true, text };
+  } catch {
+    return { provider, answered: false, text: `${provider} isn't answering at ${baseUrl}.` };
+  }
+}
+
+/** How to start a local model server. */
+function startFix(provider: string): string {
+  return provider === "ollama" ? "Start Ollama: open the Ollama app, or run ollama serve"
+    : provider === "lmstudio" ? "Open LM Studio and start its local server"
+    : provider === "magnitude" ? "Start Magnitude: open the Magnitude app, or run magnitude serve"
+    : "Start the model server";
 }
 
 /** One free request: does the server answer, accept the key, and know the model? */
@@ -98,18 +132,16 @@ async function reachable(info: ModelInfo): Promise<Check> {
     const ids = (await client.models.list()).data.map((m) => m.id);
     if (ids.some((id) => id === info.model || id === `${info.model}:latest`)) return { name, state: "ok", detail: `${where} answered and has ${info.model}` };
     // Local servers list everything they have; hosted lists are sometimes incomplete.
+    const has = ids.length > 0 ? ` It has: ${ids.slice(0, 5).join(", ")}${ids.length > 5 ? ", …" : ""}.` : " It has no models yet.";
     return info.runs === "local"
-      ? { name, state: "fail", detail: `${where} answered, but has no model named ${info.model}`, fix: info.provider === "ollama" ? `ollama pull ${info.model}  (or ollama list, then forge config set model <name>)` : "Load the model in the server, or forge config set model <name>" }
+      ? { name, state: "fail", detail: `${where} answered, but has no model named ${info.model}.${has}`, fix: info.provider === "ollama" ? `ollama pull ${info.model}  (or ollama list, then forge config set model <name>)` : info.provider === "magnitude" ? "Download the model in the Magnitude app, then forge config set model <id>, using an ID listed above" : "Load the model in the server, or forge config set model <name>" }
       : { name, state: "warn", detail: `${where} answered, but ${info.model} isn't in its model list; check the spelling` };
   } catch (err) {
     const status = (err as { status?: number }).status;
     if (status === 401 || status === 403) return { name, state: "fail", detail: `${where} rejected the key (${status})`, fix: `Check ${info.keyEnv ?? "the key"}` };
     if (status === 404 && info.provider === "anthropic") return { name, state: "fail", detail: `the Anthropic API has no model named ${info.model}`, fix: "forge config set model claude-opus-5-5" };
     if (status !== undefined) return { name, state: "warn", detail: `${where} answered with ${status}; it may not support listing models, so this check couldn't confirm the model` };
-    const fix =
-      info.provider === "ollama" ? "Start Ollama: open the Ollama app, or run ollama serve"
-      : info.provider === "lmstudio" ? "Open LM Studio and start its local server"
-      : "Check your connection, or forge config set baseUrl <url>";
+    const fix = info.runs === "local" && PROVIDERS[info.provider] ? startFix(info.provider) : "Check your connection, or forge config set baseUrl <url>";
     return { name, state: "fail", detail: `couldn't reach ${where} (${(err as Error).message})`, fix };
   }
 }

@@ -27,6 +27,8 @@ export interface ModelInfo {
   keyEnv: string | null;
   /** The key itself, read from keyEnv. Never from ~/.forgerc, which is plain text. */
   apiKey: string | undefined;
+  /** True when the key is needed only sometimes (Magnitude: only from another computer). */
+  keyOptional?: boolean;
 }
 
 interface ProviderInfo {
@@ -37,6 +39,8 @@ interface ProviderInfo {
   baseUrl?: string;
   /** Each provider reads only its own key, so one provider's key is never sent to another. */
   keyEnv?: string;
+  /** The key is needed only sometimes, e.g. for a local server reached from another computer. */
+  keyOptional?: boolean;
   /** Shown by `forge providers`. */
   note?: string;
 }
@@ -55,6 +59,9 @@ export const PROVIDERS: Record<string, ProviderInfo> = {
   cerebras: { weights: "open", runs: "hosted", baseUrl: "https://api.cerebras.ai/v1", keyEnv: "CEREBRAS_API_KEY", note: "Fast open models" },
   ollama: { weights: "open", runs: "local", defaultModel: "llama3.1", baseUrl: "http://localhost:11434/v1", note: "Local, free" },
   lmstudio: { weights: "open", runs: "local", baseUrl: "http://localhost:1234/v1", note: "Local, free" },
+  // Magnitude (magnitude.dev) spreads large open models across GPU, RAM and SSD. Its key is needed only
+  // from another computer; model IDs come from its model list (forge doctor shows them).
+  magnitude: { weights: "open", runs: "local", baseUrl: "http://127.0.0.1:10100/inference/v1", keyEnv: "MAGNITUDE_API_KEY", keyOptional: true, note: "Local, free; big open models on everyday hardware" },
 };
 
 /** Context window and price per million tokens. Anthropic figures as of 2026-11-03. */
@@ -129,7 +136,10 @@ export function rcProblem(file: string = RC_PATH): string | null {
 const detected = new Map<string, number>();
 
 /**
- * Ask a local Ollama server how big the model's context window really is, once, and remember it.
+ * Ask the server how big the model's context window really is, once, and remember it.
+ * Magnitude lists it as context_length in its model list: the window it serves the model with.
+ *
+ * For Ollama:
  * Ollama loads a model with its num_ctx (set in the Modelfile), else OLLAMA_CONTEXT_LENGTH, else 4096,
  * not with the larger maximum the model supports, so that is what is used.
  * Returns the window, or null when it isn't Ollama or can't be reached. A set context always wins.
@@ -141,7 +151,9 @@ export async function detectContextWindow(env: Record<string, string | undefined
   } catch {
     return null;
   }
-  if (info.contextWindow || info.provider !== "ollama" || !info.baseUrl) return info.contextWindow;
+  if (info.contextWindow || !info.baseUrl) return info.contextWindow;
+  if (info.provider === "magnitude") return listedContext(info);
+  if (info.provider !== "ollama") return info.contextWindow;
   try {
     const res = await fetch(`${info.baseUrl.replace(/\/v1\/?$/, "")}/api/show`, {
       method: "POST",
@@ -152,6 +164,33 @@ export async function detectContextWindow(env: Record<string, string | undefined
     const shown = (await res.json()) as { parameters?: string };
     const numCtx = /(?:^|\n)\s*num_ctx\s+(\d+)/.exec(shown.parameters ?? "")?.[1];
     const window = Number(numCtx) || number(env["OLLAMA_CONTEXT_LENGTH"]) || 4096;
+    detected.set(`${info.provider}:${info.model}`, window);
+    return window;
+  } catch {
+    return null;
+  }
+}
+
+/** The provider and address chosen, even when no model is chosen yet (same rules as resolveModel). */
+export function chosenProvider(env: Record<string, string | undefined> = process.env): { provider: string; baseUrl: string | undefined } {
+  const saved = readRc();
+  const provider = (env["FORGE_PROVIDER"] ?? saved.provider ?? "anthropic").toLowerCase();
+  const own = !saved.provider || saved.provider.toLowerCase() === provider;
+  return { provider, baseUrl: env["FORGE_BASE_URL"] ?? (own ? saved.baseUrl : undefined) ?? PROVIDERS[provider]?.baseUrl };
+}
+
+/** The context_length a server's model list gives for this model (Magnitude, and OpenRouter's format). */
+async function listedContext(info: ModelInfo): Promise<number | null> {
+  try {
+    const res = await fetch(`${info.baseUrl!.replace(/\/$/, "")}/models`, {
+      headers: info.apiKey ? { authorization: `Bearer ${info.apiKey}` } : {},
+      signal: AbortSignal.timeout(3_000),
+    });
+    if (!res.ok) return null;
+    const list = (await res.json()) as { data?: Array<{ id?: string; context_length?: number; top_provider?: { context_length?: number } }> };
+    const entry = list.data?.find((m) => m.id === info.model);
+    const window = entry?.context_length || entry?.top_provider?.context_length;
+    if (!window) return null;
     detected.set(`${info.provider}:${info.model}`, window);
     return window;
   } catch {
@@ -189,7 +228,7 @@ export function resolveModel(env: Record<string, string | undefined> = process.e
     : { ...saved, model: undefined, baseUrl: undefined, context: undefined, priceInput: undefined, priceOutput: undefined };
   const known = PROVIDERS[provider];
   const model = env["FORGE_MODEL"] ?? rc.model ?? known?.defaultModel;
-  if (!model) throw new Error(`Choose a model for "${provider}": forge config set model <name>  (or set FORGE_MODEL).`);
+  if (!model) throw new Error(`Choose a model for "${provider}": forge config set model <name>  (or set FORGE_MODEL). forge doctor lists the models a local server has.`);
   const listed = MODELS[model];
 
   const runs = known?.runs ?? "hosted";
@@ -212,6 +251,7 @@ export function resolveModel(env: Record<string, string | undefined> = process.e
     baseUrl: env["FORGE_BASE_URL"] ?? rc.baseUrl ?? known?.baseUrl,
     keyEnv,
     apiKey: keyEnv ? env[keyEnv] || undefined : undefined,
+    ...(known?.keyOptional ? { keyOptional: true } : {}),
   };
 }
 
